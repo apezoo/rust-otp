@@ -11,6 +11,10 @@ This repository provides a robust and secure suite of tools for one-time pad (OT
 -   **State Management**: The system intelligently manages the state of the one-time pads, ensuring that no part of a pad is ever reused.
 -   **Streaming Support**: Efficiently encrypt and decrypt large files using a streaming approach, minimizing memory usage.
 
+## 릴리스
+
+Pre-compiled binaries for Windows and Linux are available for download from the [GitHub Releases page](https://github.com/your-repo/releases). This is the recommended way to get started with the tools.
+
 ## 🛡️ Security
 
 The one-time pad is a theoretically unbreakable encryption algorithm when used correctly. This implementation is designed to enforce the correct usage of one-time pads by:
@@ -32,7 +36,7 @@ We welcome contributions from the community. If you would like to contribute to 
 
 ## 📜 License
 
-This project is licensed under the terms of the MIT license. See the [LICENSE](LICENSE.md) file for more details.
+This project is licensed under the terms of the `MIT license`. See the [LICENSE](LICENSE.md) file for more details.
 
 ## 🏁 Getting Started
 
@@ -50,10 +54,11 @@ To use the CLI, you can get a list of all available commands by running:
 
 ```bash
 cargo run -p otp-cli -- --help
+```
 
-## 📦 Building Binaries
+## 📦 Building from Source
 
-To build the binaries for both Linux and Windows, run the following command:
+If you prefer to build the binaries from source, you can use the provided script:
 
 ```bash
 ./build.sh

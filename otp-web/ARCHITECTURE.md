@@ -99,6 +99,7 @@ graph TD
         D -- "Adds pad to vault" --> E[otp-core Library];
         D -- "Returns Success" --> C;
     end
+```
 
 ## 6. Build and Deployment
 
@@ -106,3 +107,7 @@ The `otp-web` application is designed to be deployed as a single, self-contained
 
 -   **Asset Embedding**: We use the `rust-embed` crate to embed the contents of the `../static` directory directly into the application binary. This is handled by a procedural macro at the struct definition, eliminating the need for a separate `build.rs` script.
 -   **Serving Embedded Files**: The Axum server uses a fallback handler to serve these embedded files from memory. This approach ensures that the application is fully self-contained, simplifying deployment and distribution across different operating systems.
+
+## 7. Automated Releases
+
+The `otp-web` application is built and released as a self-contained binary through an automated GitHub Actions workflow. This workflow compiles the application for both Windows and Linux, embedding all necessary static assets. The resulting binaries are published to the GitHub Releases page, allowing users to download and run the application without any additional setup.
