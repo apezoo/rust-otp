@@ -1,6 +1,6 @@
 # One-Time Pad (OTP) Encryption Tool
 
-![OTP Rust App](docs/images/screenshot-rust-otp-app.png)
+![Rust OTP App Screenshot with Pads](./docs/images/screenshot-with-pads.png)
 
 This repository provides a robust and secure suite of tools for one-time pad (OTP) encryption, designed for both command-line and web-based environments. Our mission is to offer a powerful, user-friendly, and highly secure solution for protecting sensitive data.
 
