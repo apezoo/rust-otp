@@ -1,0 +1,37 @@
+name: Release Binaries
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  release:
+    name: Create Release and Upload Binaries
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v3
+
+      - name: Set up Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          profile: minimal
+          override: true
+
+      - name: Run build script
+        run: |
+          chmod +x build.sh
+          ./build.sh
+
+      - name: Create Release and Upload Binaries
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            precompiled_binaries/otp-cli
+            precompiled_binaries/otp-cli.exe
+            precompiled_binaries/otp-web
+            precompiled_binaries/otp-web.exe
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
