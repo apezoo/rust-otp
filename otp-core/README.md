@@ -1,4 +1,4 @@
-# OTP-CLI
+# OTP-Core
 
 A command-line tool for secure one-time pad (OTP) encryption.
 
@@ -17,7 +17,7 @@ OTP-CLI provides a simple and secure way to encrypt and decrypt files using the 
 
 1.  Clone the repository:
     ```sh
-    git clone https://github.com/your-username/otp-cli.git
+    git clone https://github.com/apezoo/rust-otp.git
     cd otp-cli
     ```
 

@@ -1,6 +1,6 @@
 # OTP-Core Architecture
 
-This document outlines the architecture for the `otp-cli` application, a commercial-grade tool for one-time pad (OTP) encryption.
+This document outlines the architecture for `otp-core`, the foundational crate that provides core logic for the entire suite of `rust-otp` tools.
 
 ## 1. High-Level Overview
 
@@ -11,12 +11,15 @@ The application is designed as a secure and robust system for managing and using
 ```mermaid
 graph TD
     subgraph "User Interaction"
-        GUI[GUI for Windows & Ubuntu] -- "Calls" --> CLI;
-        User -- "Uses" --> CLI[CLI for Power Users];
+        User -- "Interacts with" --> Application;
     end
 
-    subgraph "Application Core (Rust)"
-        CLI -- "Executes Commands" --> CoreLogic[Core Encryption & Pad Management];
+    subgraph "Application"
+        Application[Any User-Facing App] -- "Uses" --> CoreLogic;
+    end
+
+    subgraph "Core Logic (otp-core)"
+        CoreLogic[Encryption & Pad Management] -- "Manages" --> Vault;
     end
 
     subgraph "OTP Vault (File System)"
@@ -69,29 +72,7 @@ The enhanced metadata structure is as follows:
 
 The `ciphertext_hash` provides a mechanism to verify the integrity of the encrypted message, protecting against corruption and tampering.
 
-## 4. CLI Command Structure
-
-The CLI is designed to be intuitive and powerful, using nested subcommands for clarity.
-
--   `otp-cli --vault <PATH> vault <SUBCOMMAND>`
--   `otp-cli --vault <PATH> pad <SUBCOMMAND>`
--   `otp-cli --vault <PATH> encrypt ...`
--   `otp-cli --vault <PATH> decrypt ...`
-
-**Vault Commands:**
--   `init <PATH>`: Initializes a new vault.
--   `status`: Shows vault summary.
-
-**Pad Commands:**
--   `generate --size <MB>`: Creates a new pad.
--   `list`: Lists all pads and their status.
--   `delete --pad-id <ID>`: Deletes a pad.
-
-**Encryption Command:**
--   `encrypt --input <FILE> --output <FILE> --pad-id <ID> [--offset <BYTES>]`
-    -   The `--offset` is an optional flag for advanced users. The system includes strict checks to prevent reuse of pad segments.
-
-## 5. Data Flow
+## 4. Data Flow
 
 ### Encryption
 
@@ -125,14 +106,14 @@ graph TD
     E -- "Mismatch" --> L[Error: Integrity Check Failed];
 ```
 
-## 6. Pad Synchronization
+## 5. Pad Synchronization
 
 The security of any OTP system depends on the secure distribution and synchronization of pads between parties. This application is designed to facilitate this process, but it does not provide an online, secure channel for the synchronization itself.
 
 ### Initial Setup (Secure Channel Required)
 
-1.  One party (the "initiator") creates an OTP Vault (`otp-cli vault init`).
-2.  The initiator generates the required pads (`otp-cli pad generate`).
+1.  One party (the "initiator") creates an OTP Vault.
+2.  The initiator generates the required pads.
 3.  The initiator **securely delivers a complete copy of the vault directory** to the other party. This must be done via a trusted, out-of-band method (e.g., physical delivery on an encrypted USB drive).
 
 Both parties now have an identical set of pads and an identical initial state.
@@ -141,11 +122,7 @@ Both parties now have an identical set of pads and an identical initial state.
 
 1.  **Sender**: Encrypts a message. This creates a ciphertext and a metadata file, and updates the sender's state file.
 2.  **Sender**: Sends the `ciphertext` and `metadata.json` to the receiver via any channel (e.g., email).
-3.  **Receiver**: Runs the `decrypt` command. The application will:
+3.  **Receiver**: Decrypts the message. The application will:
     a. Verify the ciphertext integrity using the hash in the metadata.
     b. Decrypt the message using the correct pad segment.
     c. **Update the receiver's state file** to mark the pad segment as used, ensuring both parties remain synchronized.
-    
-## 7. Automated Releases
-
-The project is configured with a GitHub Actions workflow that automatically builds and releases pre-compiled binaries for Windows and Linux. This ensures that users can easily download and use the `otp-cli` tool without needing to set up a Rust development environment. The binaries are published to the GitHub Releases page upon tagging a new version.
