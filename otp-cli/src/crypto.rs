@@ -20,7 +20,7 @@ pub fn process_stream<R: Read, W: Write>(
     pad_segment: &[u8],
 ) -> io::Result<()> {
     let mut buffer = [0; 4096]; // Process in 4KB chunks
-    let mut pad_iter = pad_segment.iter().cycle();
+    let mut total_bytes_processed = 0;
 
     loop {
         let bytes_read = reader.read(&mut buffer)?;
@@ -28,14 +28,27 @@ pub fn process_stream<R: Read, W: Write>(
             break;
         }
 
-        let chunk = &buffer[..bytes_read];
-        let mut processed_chunk = Vec::with_capacity(bytes_read);
+        let input_chunk = &buffer[..bytes_read];
 
-        for &byte in chunk {
-            processed_chunk.push(byte ^ pad_iter.next().unwrap());
+        let pad_start = total_bytes_processed;
+        let pad_end = total_bytes_processed + bytes_read;
+
+        if pad_end > pad_segment.len() {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "Input is larger than the provided pad segment.",
+            ));
+        }
+
+        let pad_chunk = &pad_segment[pad_start..pad_end];
+
+        let mut processed_chunk = Vec::with_capacity(bytes_read);
+        for (i, &byte) in input_chunk.iter().enumerate() {
+            processed_chunk.push(byte ^ pad_chunk[i]);
         }
 
         writer.write_all(&processed_chunk)?;
+        total_bytes_processed += bytes_read;
     }
 
     Ok(())
