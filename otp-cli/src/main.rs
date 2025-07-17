@@ -185,11 +185,11 @@ fn main() {
                 }
                 PadCommands::List => {
                     if state.pads.is_empty() {
-                        info!("No pads found in vault '{}'", vault_path.display());
+                        println!("No pads found in vault '{}'", vault_path.display());
                         return;
                     }
 
-                    info!("Pads in vault '{}':", vault_path.display());
+                    println!("Pads in vault '{}':", vault_path.display());
                     println!("{:<38} {:<10} {:<15} {:<15}", "ID", "Size (MB)", "Used (Bytes)", "Remaining (Bytes)");
                     println!("{:-<80}", "");
 
@@ -213,21 +213,21 @@ fn main() {
                             Ok(_) => {
                                 state.pads.remove(pad_id);
                                 state_manager::save_state(&vault_path, &state);
-                                info!("Successfully deleted pad '{}' and its file '{}'", pad_id, pad_path.display());
+                                println!("Successfully deleted pad '{}' and its file '{}'", pad_id, pad_path.display());
                             }
                             Err(e) => {
                                 // If the file is not found, we might still want to remove it from the state
                                 if e.kind() == std::io::ErrorKind::NotFound {
                                     state.pads.remove(pad_id);
                                     state_manager::save_state(&vault_path, &state);
-                                    error!("Pad file not found at '{}', but removed it from the state. The vault may be inconsistent.", pad_path.display());
+                                    println!("Pad file not found at '{}', but removed it from the state. The vault may be inconsistent.", pad_path.display());
                                 } else {
-                                    error!("Failed to delete pad file '{}': {}", pad_path.display(), e);
+                                    println!("Failed to delete pad file '{}': {}", pad_path.display(), e);
                                 }
                             }
                         }
                     } else {
-                        error!("Pad with ID '{pad_id}' not found in the vault.");
+                        println!("Pad with ID '{pad_id}' not found in the vault.");
                     }
                 }
             }

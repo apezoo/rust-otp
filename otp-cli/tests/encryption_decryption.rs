@@ -127,3 +127,82 @@ fn test_vault_status_command() {
         .stdout(predicate::str::contains("Fully Used: 0"))
         .stdout(predicate::str::contains("Total Storage: 3.00 MB"));
 }
+
+#[test]
+fn test_pad_delete_command() {
+    // 1. Setup
+    let temp_dir = tempdir().unwrap();
+    let vault_path = temp_dir.path().join("my_test_vault");
+    Command::cargo_bin("otp-cli").unwrap()
+        .arg("--vault").arg(&vault_path)
+        .arg("vault").arg("init")
+        .assert().success();
+
+    // 2. Generate a pad
+    let generate_output = Command::cargo_bin("otp-cli").unwrap()
+        .arg("--vault").arg(&vault_path)
+        .arg("pad").arg("generate")
+        .output().unwrap();
+    let pad_id = String::from_utf8(generate_output.stdout).unwrap().trim().to_string();
+
+    // 3. Delete the pad
+    Command::cargo_bin("otp-cli").unwrap()
+        .arg("--vault").arg(&vault_path)
+        .arg("pad").arg("delete").arg("--pad-id").arg(&pad_id)
+        .assert().success();
+
+    // 4. Verify deletion
+    Command::cargo_bin("otp-cli").unwrap()
+        .arg("--vault").arg(&vault_path)
+        .arg("pad").arg("list")
+        .assert().success()
+        .stdout(predicate::str::contains("No pads found"));
+}
+
+#[test]
+fn test_encryption_decryption_user_flow() {
+    // 1. Setup
+    let temp_dir = tempdir().unwrap();
+    let vault_path = temp_dir.path().join("my_test_vault");
+    let input_content = "This is a full user flow test for encryption and decryption.";
+    let input_path = temp_dir.path().join("user_flow_input.txt");
+    fs::write(&input_path, input_content).unwrap();
+
+    // 2. Initialize vault
+    Command::cargo_bin("otp-cli").unwrap()
+        .arg("--vault").arg(&vault_path)
+        .arg("vault").arg("init")
+        .assert().success();
+
+    // 3. Generate a pad
+    let generate_output = Command::cargo_bin("otp-cli").unwrap()
+        .arg("--vault").arg(&vault_path)
+        .arg("pad").arg("generate")
+        .output().unwrap();
+    let pad_id = String::from_utf8(generate_output.stdout).unwrap().trim().to_string();
+
+    // 4. Encrypt
+    let encrypted_path = temp_dir.path().join("user_flow_encrypted.bin");
+    Command::cargo_bin("otp-cli").unwrap()
+        .arg("--vault").arg(&vault_path)
+        .arg("encrypt")
+        .arg("--input").arg(&input_path)
+        .arg("--output").arg(&encrypted_path)
+        .arg("--pad-id").arg(&pad_id)
+        .assert().success();
+
+    // 5. Decrypt
+    let decrypted_path = temp_dir.path().join("user_flow_decrypted.txt");
+    let metadata_path = temp_dir.path().join("user_flow_encrypted.bin.metadata.json");
+    Command::cargo_bin("otp-cli").unwrap()
+        .arg("--vault").arg(&vault_path)
+        .arg("decrypt")
+        .arg("--input").arg(&encrypted_path)
+        .arg("--output").arg(&decrypted_path)
+        .arg("--metadata").arg(&metadata_path)
+        .assert().success();
+
+    // 6. Verify
+    let decrypted_content = fs::read_to_string(&decrypted_path).unwrap();
+    assert_eq!(input_content, decrypted_content);
+}
