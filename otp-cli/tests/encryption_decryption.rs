@@ -51,7 +51,6 @@ fn test_full_vault_workflow() {
         .arg("--vault")
         .arg(&vault_path)
         .arg("encrypt")
-        .arg("--input")
         .arg(&input_path)
         .arg("--output")
         .arg(&encrypted_path)
@@ -186,7 +185,7 @@ fn test_encryption_decryption_user_flow() {
     Command::cargo_bin("otp-cli").unwrap()
         .arg("--vault").arg(&vault_path)
         .arg("encrypt")
-        .arg("--input").arg(&input_path)
+        .arg(&input_path)
         .arg("--output").arg(&encrypted_path)
         .arg("--pad-id").arg(&pad_id)
         .assert().success();

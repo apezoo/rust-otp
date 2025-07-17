@@ -17,39 +17,70 @@ pub struct Pad {
     pub file_name: String,
     pub size: usize,
     pub used_segments: Vec<UsedSegment>,
+    pub is_fully_used: bool,
 }
 
 impl Pad {
+    /// Calculates the total number of bytes used in the pad.
+    pub fn total_used_bytes(&self) -> usize {
+        self.used_segments.iter().map(|s| s.end - s.start).sum()
+    }
+
+    /// Checks if the pad is fully consumed.
+    pub fn is_fully_used(&self) -> bool {
+        self.total_used_bytes() >= self.size
+    }
+
+    /// Checks if the pad was fully used *before* a new segment of a given length was notionally added.
+    /// This is important for finding the correct pad file directory during decryption.
+    pub fn is_fully_used_before(&self, new_segment_length: usize) -> bool {
+        let current_usage = self.total_used_bytes();
+        // If the current usage is already conclusive, no need to subtract.
+        if current_usage >= self.size {
+            return true;
+        }
+        // Check if the state *before* this decryption would have been 'not full'.
+        if current_usage < new_segment_length {
+            // This case shouldn't logically happen if state is consistent, but as a safeguard:
+            return false;
+        }
+        // This is the core logic: determine if the pad *was* available before this segment was used.
+        (current_usage - new_segment_length) < self.size
+    }
+
+
     /// Finds the first available contiguous segment of a given length.
     pub fn find_available_segment(&self, length: usize) -> Option<usize> {
+        if self.is_fully_used() {
+            return None;
+        }
+
         // Sort segments by start byte to iterate through them in order.
         let mut sorted_segments = self.used_segments.clone();
         sorted_segments.sort_by_key(|s| s.start);
 
-        // If there are no used segments, the whole pad is available.
+        // Handle case for an empty or completely available pad
         if sorted_segments.is_empty() {
             return if self.size >= length { Some(0) } else { None };
         }
 
-        // Check for space before the first segment
+        // Check for space before the first used segment
         if sorted_segments[0].start >= length {
             return Some(0);
         }
-
-        // Now, iterate through the gaps between segments.
+        
+        // Now, iterate through the gaps between used segments.
         let mut last_end = sorted_segments[0].end;
-
-        // Check for space between segments
         for segment in sorted_segments.iter().skip(1) {
-            let gap = segment.start - last_end;
+            let gap = segment.start.saturating_sub(last_end);
             if gap >= length {
-                return Some(last_end);
+                return Some(last_end); // Found a suitable gap
             }
             last_end = segment.end;
         }
 
-        // Check for space after the last segment
-        if self.size - last_end >= length {
+        // Finally, check for space after the very last segment
+        if self.size.saturating_sub(last_end) >= length {
             return Some(last_end);
         }
 
@@ -71,6 +102,7 @@ impl VaultState {
             file_name,
             size,
             used_segments: vec![],
+            is_fully_used: false,
         };
         self.pads.insert(id, pad);
     }
