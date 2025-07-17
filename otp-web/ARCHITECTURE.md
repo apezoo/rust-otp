@@ -4,7 +4,7 @@ This document outlines the revised architecture for the `otp-web` application. T
 
 ## 1. High-Level Overview
 
-The application is a hybrid system. A Rust-based backend, built with Axum, is responsible for serving the frontend and managing the state of the one-time pad (OTP) vault. The frontend, a vanilla JavaScript single-page application, handles all user interactions, file processing, and cryptographic operations.
+The application is a hybrid system. A Rust-based backend, built with Axum, is responsible for managing the state of the one-time pad (OTP) vault. It also serves the frontend, a vanilla JavaScript single-page application, by embedding the static assets directly into the binary, which allows for a self-contained deployment. The frontend handles all user interactions, file processing, and cryptographic operations.
 
 ## 2. Component Diagram
 
@@ -99,3 +99,10 @@ graph TD
         D -- "Adds pad to vault" --> E[otp-core Library];
         D -- "Returns Success" --> C;
     end
+
+## 6. Build and Deployment
+
+The `otp-web` application is designed to be deployed as a single, self-contained binary. This is achieved by embedding all frontend assets (HTML, CSS, JavaScript) directly into the executable during the build process.
+
+-   **Build Script (`build.rs`)**: A build script uses the `static-files` crate to recursively package the contents of the `../static` directory.
+-   **Serving Embedded Files**: The Axum server uses a custom fallback handler to serve these embedded files from memory. This eliminates the need for a separate `static` assets directory at runtime, simplifying deployment, especially for precompiled binaries distributed across different operating systems.
