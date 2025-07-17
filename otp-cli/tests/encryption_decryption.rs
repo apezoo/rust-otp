@@ -206,3 +206,34 @@ fn test_encryption_decryption_user_flow() {
     let decrypted_content = fs::read_to_string(&decrypted_path).unwrap();
     assert_eq!(input_content, decrypted_content);
 }
+
+#[test]
+fn test_pad_list_command() {
+    // 1. Setup
+    let temp_dir = tempdir().unwrap();
+    let vault_path = temp_dir.path().join("my_test_vault");
+    Command::cargo_bin("otp-cli").unwrap()
+        .arg("--vault").arg(&vault_path)
+        .arg("vault").arg("init")
+        .assert().success();
+
+    // 2. Generate two pads
+    let mut pad_ids = Vec::new();
+    for _ in 0..2 {
+        let generate_output = Command::cargo_bin("otp-cli").unwrap()
+            .arg("--vault").arg(&vault_path)
+            .arg("pad").arg("generate")
+            .output().unwrap();
+        let pad_id = String::from_utf8(generate_output.stdout).unwrap().trim().to_string();
+        pad_ids.push(pad_id);
+    }
+
+    // 3. List pads and verify
+    let mut cmd_list = Command::cargo_bin("otp-cli").unwrap();
+    cmd_list
+        .arg("--vault").arg(&vault_path)
+        .arg("pad").arg("list")
+        .assert().success()
+        .stdout(predicate::str::contains(&pad_ids[0]))
+        .stdout(predicate::str::contains(&pad_ids[1]));
+}
