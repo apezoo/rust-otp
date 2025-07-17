@@ -31,10 +31,10 @@ fn main() {
     match &cli.command {
         Commands::Generate { path, size } => {
             let size_in_bytes = size * 1024 * 1024;
-            info!("Generating a new pad file at '{}' with size {} MB.", path, size);
+            info!("Generating a new pad file at '{path}' with size {size} MB.");
             match pad_generator::generate_pad(path, size_in_bytes) {
                 Ok(_) => info!("Successfully generated pad file."),
-                Err(e) => error!("Failed to generate pad file: {}", e),
+                Err(e) => error!("Failed to generate pad file: {e}"),
             }
         }
     }
