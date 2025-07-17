@@ -141,11 +141,11 @@ fn main() {
              match command {
                 PadCommands::Generate { size } => {
                     let pad_id = Uuid::new_v4().to_string();
-                    let file_name = format!("{}.pad", pad_id);
+                    let file_name = format!("{pad_id}.pad");
                     let pad_path = vault_path.join("pads/available").join(&file_name);
                     let size_in_bytes = size * 1024 * 1024;
 
-                    info!("Generating a new pad with ID '{}' ({} MB)", pad_id, size);
+                    info!("Generating a new pad with ID '{pad_id}' ({size} MB)");
 
                     match pad_generator::generate_pad(pad_path.to_str().unwrap(), size_in_bytes) {
                         Ok(_) => {
@@ -153,9 +153,9 @@ fn main() {
                             state_manager::save_state(&vault_path, &state);
                             info!("Successfully generated and registered pad.");
                             // Print the ID to stdout for scripting
-                            println!("{}", pad_id);
+                            println!("{pad_id}");
                         }
-                        Err(e) => error!("Failed to generate pad file: {}", e),
+                        Err(e) => error!("Failed to generate pad file: {e}"),
                     }
                 }
                 PadCommands::List => {
@@ -172,7 +172,7 @@ fn main() {
                         let total_used: usize = pad.used_segments.iter().map(|s| s.end - s.start).sum();
                         let remaining = pad.size - total_used;
                         let size_mb = pad.size as f64 / (1024.0 * 1024.0);
-                        println!("{:<38} {:<10.2} {:<15} {:<15}", id, size_mb, total_used, remaining);
+                        println!("{id:<38} {size_mb:<10.2} {total_used:<15} {remaining:<15}");
                     }
                 }
                 PadCommands::Delete { pad_id } => {
@@ -202,7 +202,7 @@ fn main() {
                             }
                         }
                     } else {
-                        error!("Pad with ID '{}' not found in the vault.", pad_id);
+                        error!("Pad with ID '{pad_id}' not found in the vault.");
                     }
                 }
             }
@@ -233,7 +233,7 @@ fn main() {
                 None => {
                     // Standard mode: Find the next available segment.
                     pad.find_available_segment(input_file_size).unwrap_or_else(|| {
-                        error!("Not enough contiguous space left in pad '{}' to encrypt this file.", pad_id);
+                        error!("Not enough contiguous space left in pad '{pad_id}' to encrypt this file.");
                         // TODO: Suggest creating a new pad or using a different one.
                         std::process::exit(1);
                     })
@@ -301,17 +301,17 @@ fn main() {
 
                 // Handle pad lifecycle (moving if fully used)
                 if pad_is_full {
-                    info!("Pad '{}' is now fully consumed. Moving to 'used' directory.", pad_id);
+                    info!("Pad '{pad_id}' is now fully consumed. Moving to 'used' directory.");
                     let old_pad_path = vault_path.join("pads/available").join(&file_name_clone);
                     let used_pad_path = vault_path.join("pads/used").join(&file_name_clone);
                     fs::rename(old_pad_path, used_pad_path).expect("Failed to move used pad");
                 }
 
                 info!("Successfully encrypted file '{}' to '{}'", input.display(), output.display());
-                info!("Decryption metadata saved to '{}'", metadata_path);
+                info!("Decryption metadata saved to '{metadata_path}'");
 
             } else {
-                error!("Pad with ID '{}' not found.", pad_id);
+                error!("Pad with ID '{pad_id}' not found.");
             }
         }
         Commands::Decrypt { input, output, metadata } => {
