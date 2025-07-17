@@ -2,19 +2,19 @@
 //! A command-line interface for the OTP encryption tool.
 
 use clap::{Parser, Subcommand};
-use log::{info, error};
+use log::{error, info};
+use otp_core::{pad_generator, state_manager};
+use sha2::{Digest, Sha256};
 use std::fs;
+use std::io::{Read, Seek, SeekFrom, Write};
 use std::path::PathBuf;
-use sha2::{Sha256, Digest};
-use std::io::{Read, Write, Seek, SeekFrom};
 use uuid::Uuid;
-
-use otp_core::state_manager;
-use otp_core::pad_generator;
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
-#[command(after_help = "EXAMPLES:\n  \n# Initialize a new vault\notp-cli --vault ./my_vault vault init\n\n# Generate a new pad\notp-cli --vault ./my_vault pad generate\n\n# Encrypt a file with automatic pad selection\notp-cli --vault ./my_vault encrypt ./my_file.txt\n\n# Encrypt a file with a specific pad\notp-cli --vault ./my_vault encrypt ./my_file.txt --pad-id <PAD_ID>\n\n# Decrypt using a metadata file\notp-cli --vault ./my_vault decrypt --metadata ./my_file.enc.metadata.json --input ./my_file.enc --output ./my_file.txt\n\n# Decrypt manually without a metadata file\notp-cli --vault ./my_vault decrypt --input ./my_file.enc --output ./my_file.txt --pad-id <PAD_ID> --length <FILE_SIZE>")]
+#[command(
+    after_help = "EXAMPLES:\n  \n# Initialize a new vault\notp-cli --vault ./my_vault vault init\n\n# Generate a new pad\notp-cli --vault ./my_vault pad generate\n\n# Encrypt a file with automatic pad selection\notp-cli --vault ./my_vault encrypt ./my_file.txt\n\n# Encrypt a file with a specific pad\notp-cli --vault ./my_vault encrypt ./my_file.txt --pad-id <PAD_ID>\n\n# Decrypt using a metadata file\notp-cli --vault ./my_vault decrypt --metadata ./my_file.enc.metadata.json --input ./my_file.enc --output ./my_file.txt\n\n# Decrypt manually without a metadata file\notp-cli --vault ./my_vault decrypt --input ./my_file.enc --output ./my_file.txt --pad-id <PAD_ID> --length <FILE_SIZE>"
+)]
 struct Cli {
     /// The path to the OTP vault.
     #[arg(long, global = true)]
@@ -75,7 +75,7 @@ enum Commands {
         /// The length of the pad segment to use. Required if --metadata is not used.
         #[arg(long, value_name = "LENGTH", required_if_eq("metadata", "None"))]
         length: Option<usize>,
-        
+
         /// The starting offset in bytes for the pad segment. Defaults to 0 if not provided.
         #[arg(long, value_name = "OFFSET", default_value_t = 0)]
         offset: usize,
@@ -91,7 +91,9 @@ enum VaultCommands {
 }
 
 #[derive(Subcommand)]
-#[command(after_help = "EXAMPLES:\n  \n# Generate a single 10MB pad\notp-cli --vault ./my_vault pad generate --size 10\n\n# Generate 5 pads of 1MB each\notp-cli --vault ./my_vault pad generate --count 5")]
+#[command(
+    after_help = "EXAMPLES:\n  \n# Generate a single 10MB pad\notp-cli --vault ./my_vault pad generate --size 10\n\n# Generate 5 pads of 1MB each\notp-cli --vault ./my_vault pad generate --count 5"
+)]
 enum PadCommands {
     /// Generate a new one-time pad file
     Generate {
@@ -184,21 +186,28 @@ fn main() {
                 let used_pads = state.pads.len() - available_pads;
                 let total_pads = state.pads.len();
 
-                let total_storage_bytes: usize = state.pads.values().map(|p| p.size).sum();
+                let total_storage_bytes: u64 = state.pads.values().map(|p| p.size as u64).sum();
                 let total_storage_mb = total_storage_bytes as f64 / (1024.0 * 1024.0);
 
-                let total_used_bytes: usize = state.pads.values().map(|p| p.total_used_bytes()).sum();
+                let total_used_bytes: u64 = state
+                    .pads
+                    .values()
+                    .map(|p| p.total_used_bytes() as u64)
+                    .sum();
                 let total_used_mb = total_used_bytes as f64 / (1024.0 * 1024.0);
 
                 println!("Vault Status for: {}", vault_path.display());
                 println!("{:-<40}", "");
-                println!("Total Pads: {}", total_pads);
-                println!("  - Available: {}", available_pads);
-                println!("  - Fully Used: {}", used_pads);
+                println!("Total Pads: {total_pads}");
+                println!("  - Available: {available_pads}");
+                println!("  - Fully Used: {used_pads}");
                 println!();
-                println!("Total Storage: {:.2} MB", total_storage_mb);
-                println!("  - Used: {:.2} MB", total_used_mb);
-                println!("  - Remaining: {:.2} MB", total_storage_mb - total_used_mb);
+                println!("Total Storage: {total_storage_mb:.2} MB");
+                println!("  - Used: {total_used_mb:.2} MB");
+                println!(
+                    "  - Remaining: {:.2} MB",
+                    total_storage_mb - total_used_mb
+                );
             }
         },
         Commands::Pad { command } => {
@@ -215,14 +224,18 @@ fn main() {
                         let pad_path = vault_path.join("pads/available").join(&file_name);
                         let size_in_bytes = size * 1024 * 1024;
 
-                        match pad_generator::generate_pad(pad_path.to_str().unwrap(), size_in_bytes) {
-                            Ok(_) => {
+                        match pad_generator::generate_pad(
+                            pad_path.to_str().unwrap_or_default(),
+                            size_in_bytes,
+                        ) {
+                            Ok(()) => {
                                 state.add_pad(pad_id.clone(), file_name, size_in_bytes);
                                 println!("{pad_id}");
                             }
-                            Err(e) => error!("Failed to generate pad file for ID {pad_id}: {e}"),
+                            Err(e) => {
+                                error!("Failed to generate pad file for ID {pad_id}: {e}");
+                            }
                         }
-
                     }
                     if let Err(e) = state_manager::save_state(&vault_path, &state) {
                         error!("Failed to save state after generating pads: {e}");
@@ -237,7 +250,10 @@ fn main() {
                     }
 
                     println!("Pads in vault '{}':", vault_path.display());
-                    println!("{:<38} {:<10} {:<15} {:<15}", "ID", "Size (MB)", "Used (Bytes)", "Remaining (Bytes)");
+                    println!(
+                        "{:<38} {:<10} {:<15} {:<15}",
+                        "ID", "Size (MB)", "Used (Bytes)", "Remaining (Bytes)"
+                    );
                     println!("{:-<80}", "");
 
                     for (id, pad) in &state.pads {
@@ -249,28 +265,44 @@ fn main() {
                 }
                 PadCommands::Delete { pad_id } => {
                     if let Some(pad_to_delete) = state.pads.get(pad_id) {
-                        let pad_dir = if pad_to_delete.is_fully_used { "used" } else { "available" };
-                        let pad_path = vault_path.join("pads").join(pad_dir).join(&pad_to_delete.file_name);
+                        let pad_dir = if pad_to_delete.is_fully_used {
+                            "used"
+                        } else {
+                            "available"
+                        };
+                        let pad_path = vault_path
+                            .join("pads")
+                            .join(pad_dir)
+                            .join(&pad_to_delete.file_name);
 
                         match fs::remove_file(&pad_path) {
-                            Ok(_) => {
+                            Ok(()) => {
                                 state.pads.remove(pad_id);
                                 if let Err(e) = state_manager::save_state(&vault_path, &state) {
                                     error!("Failed to save state after deleting pad: {e}");
                                 } else {
-                                    println!("Successfully deleted pad '{}' and its file '{}'", pad_id, pad_path.display());
+                                    println!(
+                                        "Successfully deleted pad '{}' and its file '{}'",
+                                        pad_id,
+                                        pad_path.display()
+                                    );
                                 }
                             }
                             Err(e) => {
                                 if e.kind() == std::io::ErrorKind::NotFound {
                                     state.pads.remove(pad_id);
-                                     if let Err(e) = state_manager::save_state(&vault_path, &state) {
+                                    if let Err(e) =
+                                        state_manager::save_state(&vault_path, &state)
+                                    {
                                         error!("Failed to save state after removing non-existent pad file: {e}");
-                                     } else {
+                                    } else {
                                         println!("Pad file not found at '{}', but removed it from the state. The vault may be inconsistent.", pad_path.display());
-                                     }
+                                    }
                                 } else {
-                                    error!("Failed to delete pad file '{}': {e}", pad_path.display());
+                                    error!(
+                                        "Failed to delete pad file '{}': {e}",
+                                        pad_path.display()
+                                    );
                                 }
                             }
                         }
@@ -279,7 +311,7 @@ fn main() {
                     }
                 }
             }
-        },
+        }
         Commands::Encrypt {
             input,
             output,
@@ -290,12 +322,13 @@ fn main() {
                 error!("Failed to load vault state: {e}");
                 std::process::exit(1);
             });
-            let input_file_size = fs::metadata(input)
-                .map(|m| m.len() as usize)
-                .unwrap_or_else(|e| {
+            let input_file_size = match fs::metadata(input) {
+                Ok(m) => m.len() as usize,
+                Err(e) => {
                     error!("Failed to get input file metadata: {e}");
                     std::process::exit(1);
-                });
+                }
+            };
 
             let output = output.clone().unwrap_or_else(|| {
                 let mut new_path = input.as_os_str().to_owned();
@@ -326,36 +359,48 @@ fn main() {
 
             if let Some(pad) = state.pads.get_mut(&pad_id_to_use) {
                 if pad.is_fully_used {
-                    error!("Cannot encrypt with pad '{}' because it is fully used.", pad.id);
+                    error!(
+                        "Cannot encrypt with pad '{}' because it is fully used.",
+                        pad.id
+                    );
                     return;
                 }
 
                 let start_byte = match offset {
                     Some(offset_val) => {
-                        let requested_segment = state_manager::UsedSegment { start: *offset_val, end: *offset_val + input_file_size };
-                        let is_overlapping = pad.used_segments.iter().any(|s| {
-                            (requested_segment.start < s.end) && (requested_segment.end > s.start)
-                        });
+                        let requested_segment = state_manager::UsedSegment {
+                            start: *offset_val,
+                            end: *offset_val + input_file_size,
+                        };
+                        let is_overlapping = pad
+                            .used_segments
+                            .iter()
+                            .any(|s| (requested_segment.start < s.end) && (requested_segment.end > s.start));
 
                         if is_overlapping {
                             error!("The requested pad segment overlaps with an already used segment. This is a critical security risk. Aborting.");
                             return;
                         }
                         if requested_segment.end > pad.size {
-                             error!("The requested pad segment exceeds the pad's total size. Aborting.");
-                             return;
+                            error!(
+                                "The requested pad segment exceeds the pad's total size. Aborting."
+                            );
+                            return;
                         }
                         *offset_val
                     }
-                    None => pad
-                        .find_available_segment(input_file_size)
-                        .unwrap_or_else(|| {
-                            error!("Not enough contiguous space left in pad '{pad_id_to_use}' to encrypt this file.");
-                            std::process::exit(1);
-                        }),
+                    None => pad.find_available_segment(input_file_size).unwrap_or_else(|| {
+                        error!("Not enough contiguous space left in pad '{pad_id_to_use}' to encrypt this file.");
+                        std::process::exit(1);
+                    }),
                 };
 
-                info!("Encrypting '{}' with pad '{}' starting at byte {}.", input.display(), pad_id_to_use, start_byte);
+                info!(
+                    "Encrypting '{}' with pad '{}' starting at byte {}.",
+                    input.display(),
+                    pad_id_to_use,
+                    start_byte
+                );
 
                 let pad_path = vault_path.join("pads/available").join(&pad.file_name);
                 let mut pad_file = fs::File::open(&pad_path).unwrap_or_else(|e| {
@@ -395,8 +440,9 @@ fn main() {
                     }
 
                     let input_chunk = &buffer[..bytes_read];
-                    let pad_chunk = &pad_segment[total_bytes_processed..total_bytes_processed + bytes_read];
-                    
+                    let pad_chunk =
+                        &pad_segment[total_bytes_processed..total_bytes_processed + bytes_read];
+
                     let mut processed_chunk = Vec::with_capacity(bytes_read);
                     for (i, &byte) in input_chunk.iter().enumerate() {
                         processed_chunk.push(byte ^ pad_chunk[i]);
@@ -409,7 +455,7 @@ fn main() {
                     hasher.update(&processed_chunk);
                     total_bytes_processed += bytes_read;
                 }
-                
+
                 let ciphertext_hash = format!("{:x}", hasher.finalize());
 
                 let metadata = CiphertextMetadata {
@@ -419,11 +465,10 @@ fn main() {
                     ciphertext_hash,
                 };
                 let metadata_path = format!("{}.metadata.json", output.display());
-                let metadata_str =
-                    serde_json::to_string_pretty(&metadata).unwrap_or_else(|e| {
-                        error!("Failed to serialize metadata: {e}");
-                        std::process::exit(1);
-                    });
+                let metadata_str = serde_json::to_string_pretty(&metadata).unwrap_or_else(|e| {
+                    error!("Failed to serialize metadata: {e}");
+                    std::process::exit(1);
+                });
                 if let Err(e) = fs::write(&metadata_path, metadata_str) {
                     error!("Failed to write metadata file: {e}");
                     std::process::exit(1);
@@ -434,8 +479,8 @@ fn main() {
                     end: start_byte + input_file_size,
                 });
 
-                let total_used_bytes = pad.total_used_bytes();
-                let usage_percent = (total_used_bytes as f64 / pad.size as f64) * 100.0;
+                let total_used_bytes = pad.total_used_bytes() as f64;
+                let usage_percent = (total_used_bytes / pad.size as f64) * 100.0;
 
                 pad.is_fully_used = pad.total_used_bytes() >= pad.size;
                 let is_full = pad.is_fully_used;
@@ -447,7 +492,9 @@ fn main() {
                 println!("Pad '{pad_id_to_use}' is now {usage_percent:.2}% used.");
 
                 if is_full {
-                    println!("Pad '{pad_id_to_use}' is now fully consumed. Moving to 'used' directory.");
+                    println!(
+                        "Pad '{pad_id_to_use}' is now fully consumed. Moving to 'used' directory."
+                    );
                     let old_pad_path =
                         vault_path.join("pads/available").join(&file_name_clone);
                     let used_pad_path = vault_path.join("pads/used").join(&file_name_clone);
@@ -458,9 +505,12 @@ fn main() {
                     }
                 }
 
-                println!("Successfully encrypted file '{}' to '{}'", input.display(), output.display());
+                println!(
+                    "Successfully encrypted file '{}' to '{}'",
+                    input.display(),
+                    output.display()
+                );
                 println!("Decryption metadata saved to '{metadata_path}'");
-
             } else {
                 error!("Pad with ID '{pad_id_to_use}' not found.");
             }
@@ -479,15 +529,15 @@ fn main() {
             });
 
             let dec_info = if let Some(meta_path) = metadata {
-                let metadata_str = fs::read_to_string(meta_path)
-                    .unwrap_or_else(|e| {
-                        error!("Failed to read metadata file: {e}");
-                        std::process::exit(1);
-                    });
-                let meta: CiphertextMetadata = serde_json::from_str(&metadata_str).unwrap_or_else(|e| {
-                    error!("Failed to parse metadata file: {e}");
+                let metadata_str = fs::read_to_string(meta_path).unwrap_or_else(|e| {
+                    error!("Failed to read metadata file: {e}");
                     std::process::exit(1);
                 });
+                let meta: CiphertextMetadata =
+                    serde_json::from_str(&metadata_str).unwrap_or_else(|e| {
+                        error!("Failed to parse metadata file: {e}");
+                        std::process::exit(1);
+                    });
 
                 let mut hasher = Sha256::new();
                 let mut ciphertext_file = fs::File::open(input).unwrap_or_else(|e| {
@@ -516,14 +566,21 @@ fn main() {
                     length: length.unwrap_or_default(),
                 }
             };
-            
+
             if let Some(pad) = state.pads.get_mut(&dec_info.pad_id) {
-                let pad_dir = if pad.is_fully_used { "used" } else { "available" };
+                let pad_dir = if pad.is_fully_used {
+                    "used"
+                } else {
+                    "available"
+                };
                 let pad_path = vault_path.join("pads").join(pad_dir).join(&pad.file_name);
 
                 if !pad_path.exists() {
-                     error!("Pad file '{}' not found in vault. It may have been moved or deleted.", pad.file_name);
-                     return;
+                    error!(
+                        "Pad file '{}' not found in vault. It may have been moved or deleted.",
+                        pad.file_name
+                    );
+                    return;
                 }
 
                 let mut pad_file = fs::File::open(&pad_path).unwrap_or_else(|e| {
@@ -581,18 +638,9 @@ fn main() {
                     start: dec_info.start_byte,
                     end: dec_info.start_byte + dec_info.length,
                 };
-                let state_changed = if !pad
-                    .used_segments
-                    .iter()
-                    .any(|s| s.start == new_segment.start && s.end == new_segment.end)
-                {
+                if pad.used_segments.iter().all(|s| s.start != new_segment.start || s.end != new_segment.end) {
                     pad.used_segments.push(new_segment);
-                    true
-                } else {
-                    false
-                };
 
-                if state_changed {
                     let file_name_clone = pad.file_name.clone();
                     let was_available = !pad.is_fully_used;
                     pad.is_fully_used = pad.total_used_bytes() >= pad.size;

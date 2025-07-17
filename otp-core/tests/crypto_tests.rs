@@ -4,7 +4,7 @@ use otp_core::crypto;
 #[test]
 fn test_encryption_decryption_roundtrip() {
     let plaintext = b"Hello, world!";
-    let pad = (0..plaintext.len()).map(|i| (i * 7) as u8).collect::<Vec<u8>>();
+    let pad = (0..plaintext.len()).map(|i| ((i * 7) % 256) as u8).collect::<Vec<u8>>();
 
     let ciphertext = crypto::xor(plaintext, &pad);
     let decrypted_plaintext = crypto::xor(&ciphertext, &pad);
@@ -22,11 +22,11 @@ fn test_file_encryption_decryption_simulation() {
     // 2. Simulate requesting and receiving a pad segment
     let pad_id = "test-pad-id".to_string();
     let start = 123;
-    let pad_segment = (0..length).map(|i| (i * 3) as u8).collect::<Vec<u8>>();
+    let pad_segment = (0..length).map(|i| ((i * 3) % 256) as u8).collect::<Vec<u8>>();
 
     // 3. Simulate client-side encryption
     let ciphertext = crypto::xor(&plaintext, &pad_segment);
-    let metadata = format!(r#"{{"pad_id":"{}","start":{},"length":{}}}"#, pad_id, start, length);
+    let metadata = format!(r#"{{"pad_id":"{pad_id}","start":{start},"length":{length}}}"#);
 
     // 4. Simulate client-side decryption
     let received_ciphertext = ciphertext;

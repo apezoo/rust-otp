@@ -420,16 +420,7 @@ async fn upload_pads_handler(
     };
     let mut imported_pads = Vec::new();
 
-    while let Some(field_result) = multipart.next_field().await {
-        let field = match field_result {
-            Ok(field) => field,
-            Err(e) => {
-                return (
-                    StatusCode::BAD_REQUEST,
-                    Json(json!({ "error": format!("Failed to get multipart field: {e}") })),
-                );
-            }
-        };
+    while let Ok(Some(field)) = multipart.next_field().await {
         let file_name = field.file_name().unwrap_or("unknown.pad").to_string();
         let data = match field.bytes().await {
             Ok(data) => data,
