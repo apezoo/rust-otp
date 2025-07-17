@@ -132,8 +132,33 @@ fn main() {
                 info!("Vault initialized successfully.");
             }
             VaultCommands::Status => {
-                // TODO: Implement vault status logic
-                 info!("Vault status for '{}'", vault_path.display());
+                let state = state_manager::load_state(&vault_path);
+                let available_pads = state.pads.values().filter(|p| {
+                    let total_used: usize = p.used_segments.iter().map(|s| s.end - s.start).sum();
+                    total_used < p.size
+                }).count();
+
+                let used_pads = state.pads.len() - available_pads;
+                
+                let total_pads = state.pads.len();
+
+                let total_storage_bytes: usize = state.pads.values().map(|p| p.size).sum();
+                let total_storage_mb = total_storage_bytes as f64 / (1024.0 * 1024.0);
+
+                let total_used_bytes: usize = state.pads.values().map(|p| {
+                    p.used_segments.iter().map(|s| s.end - s.start).sum::<usize>()
+                }).sum();
+                let total_used_mb = total_used_bytes as f64 / (1024.0 * 1024.0);
+
+                println!("Vault Status for: {}", vault_path.display());
+                println!("{:-<40}", "");
+                println!("Total Pads: {}", total_pads);
+                println!("  - Available: {}", available_pads);
+                println!("  - Fully Used: {}", used_pads);
+                println!();
+                println!("Total Storage: {:.2} MB", total_storage_mb);
+                println!("  - Used: {:.2} MB", total_used_mb);
+                println!("  - Remaining: {:.2} MB", total_storage_mb - total_used_mb);
             }
         },
         Commands::Pad { command } => {

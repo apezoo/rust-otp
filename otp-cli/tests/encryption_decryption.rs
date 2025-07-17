@@ -1,6 +1,7 @@
 use std::fs;
 use std::process::Command;
 use assert_cmd::prelude::*;
+use predicates::prelude::*;
 use tempfile::tempdir;
 
 #[test]
@@ -80,4 +81,49 @@ fn test_full_vault_workflow() {
     // 6. Verify the decrypted content
     let decrypted_content = fs::read_to_string(&decrypted_path).unwrap();
     assert_eq!(input_content, decrypted_content);
+}
+
+#[test]
+fn test_vault_status_command() {
+    // 1. Setup temporary directories for the test
+    let temp_dir = tempdir().unwrap();
+    let vault_path = temp_dir.path().join("my_test_vault");
+
+    // 2. Initialize the vault
+    let mut cmd_init = Command::cargo_bin("otp-cli").unwrap();
+    cmd_init
+        .arg("--vault")
+        .arg(&vault_path)
+        .arg("vault")
+        .arg("init")
+        .assert()
+        .success();
+
+    // 3. Generate a few pads
+    for _ in 0..3 {
+        let mut cmd_gen = Command::cargo_bin("otp-cli").unwrap();
+        cmd_gen
+            .arg("--vault")
+            .arg(&vault_path)
+            .arg("pad")
+            .arg("generate")
+            .arg("--size")
+            .arg("1") // 1 MB
+            .assert()
+            .success();
+    }
+
+    // 4. Run `vault status` and check the output
+    let mut cmd_status = Command::cargo_bin("otp-cli").unwrap();
+    cmd_status
+        .arg("--vault")
+        .arg(&vault_path)
+        .arg("vault")
+        .arg("status")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Total Pads: 3"))
+        .stdout(predicate::str::contains("Available: 3"))
+        .stdout(predicate::str::contains("Fully Used: 0"))
+        .stdout(predicate::str::contains("Total Storage: 3.00 MB"));
 }
