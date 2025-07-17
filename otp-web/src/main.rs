@@ -18,7 +18,8 @@ use std::fs;
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::sync::Arc;
-use tower_http::{cors::CorsLayer, services::ServeDir};
+use axum::http::Uri;
+use tower_http::cors::CorsLayer;
 use uuid::Uuid;
 
 /// Shared application state
@@ -53,6 +54,8 @@ struct MarkUsedRequest {
     end: usize,
 }
 
+include!(concat!(env!("OUT_DIR"), "/static-files.rs"));
+
 #[tokio::main]
 async fn main() {
     let port = 3000;
@@ -78,7 +81,6 @@ async fn main() {
 
     // Build the Axum router.
     let app = Router::new()
-        .nest_service("/", ServeDir::new("static"))
         .route("/api/vault/status", get(get_vault_status))
         .route("/api/pads", get(list_pads_handler))
         .route("/api/pads/:pad_id", delete(delete_pad_handler))
@@ -89,7 +91,8 @@ async fn main() {
         .route("/api/pads/mark_used", post(mark_used_handler))
         .route("/api/vault/clear", post(clear_vault_handler))
         .with_state(app_state)
-        .layer(CorsLayer::permissive());
+        .layer(CorsLayer::permissive())
+        .fallback(static_file_handler);
 
     // Run the server.
     let addr = SocketAddr::from(([0, 0, 0, 0], port));
@@ -332,4 +335,23 @@ async fn clear_vault_handler(
     let initial_state = state_manager::VaultState::default();
     state_manager::save_state(&state.vault_path, &initial_state);
     (StatusCode::OK, Json(json!({ "message": "Vault cleared successfully" })))
+}
+
+async fn static_file_handler(uri: Uri) -> impl IntoResponse {
+    let path = uri.path().trim_start_matches('/');
+    let path = if path.is_empty() {
+        "index.html"
+    } else {
+        path
+    };
+
+    match static_files::get(path) {
+        Some((content_type, bytes)) => (
+            StatusCode::OK,
+            [(header::CONTENT_TYPE, content_type)],
+            bytes,
+        )
+            .into_response(),
+        None => (StatusCode::NOT_FOUND, "Not Found").into_response(),
+    }
 }
