@@ -1,7 +1,14 @@
 [package]
 name = "otp-web"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
+description = "Web server for managing and using One-Time Pads (OTP)."
+license = "AGPL-3.0-or-later"
+repository = "https://github.com/apezoo/rust-otp"
+readme = "README.md"
+keywords = ["otp", "encryption", "security", "crypto", "one-time-pad"]
+categories = ["cryptography", "web-programming"]
+
 [lints]
 workspace = true
 

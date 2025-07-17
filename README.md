@@ -36,7 +36,22 @@ We welcome contributions from the community. If you would like to contribute to 
 
 ## 📜 License
 
-This project is licensed under the terms of the `MIT license`. See the [LICENSE](LICENSE.md) file for more details.
+This project is licensed under the terms of the `GNU Affero General Public License v3.0`. See the [LICENSE](LICENSE.md) file for more details.
+
+## 📚 Project Documentation
+
+For more detailed information about the architecture and usage of each component, please refer to the following documents:
+
+- **Core Library (`otp-core`)**
+  - [**README**](otp-core/README.md): Core concepts and usage.
+  - [**ARCHITECTURE**](otp-core/ARCHITECTURE.md): In-depth technical design of the core components.
+
+- **Command-Line Interface (`otp-cli`)**
+  - [**ARCHITECTURE**](otp-cli/ARCHITECTURE.md): Design and command structure of the CLI tool.
+
+- **Web Application (`otp-web`)**
+  - [**README**](otp-web/README.md): Setup and usage for the web interface.
+  - [**ARCHITECTURE**](otp-web/ARCHITECTURE.md): Architecture of the web application, including API endpoints and data flow.
 
 ## 🏁 Getting Started
 

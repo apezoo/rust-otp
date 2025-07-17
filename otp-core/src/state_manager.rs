@@ -29,17 +29,20 @@ pub struct Pad {
 
 impl Pad {
     /// Calculates the total number of bytes used in the pad.
+    #[must_use]
     pub fn total_used_bytes(&self) -> usize {
         self.used_segments.iter().map(|s| s.end - s.start).sum()
     }
 
     /// Checks if the pad is fully consumed.
+    #[must_use]
     pub fn is_fully_used(&self) -> bool {
         self.total_used_bytes() >= self.size
     }
 
     /// Checks if the pad was fully used *before* a new segment of a given length was notionally added.
     /// This is important for finding the correct pad file directory during decryption.
+    #[must_use]
     pub fn is_fully_used_before(&self, new_segment_length: usize) -> bool {
         let current_usage = self.total_used_bytes();
         // If the current usage is already conclusive, no need to subtract.
@@ -57,6 +60,7 @@ impl Pad {
 
 
     /// Finds the first available contiguous segment of a given length.
+    #[must_use]
     pub fn find_available_segment(&self, length: usize) -> Option<usize> {
         if self.is_fully_used() {
             return None;
@@ -117,19 +121,28 @@ impl VaultState {
 }
 
 /// Loads the state from a specific vault path.
-pub fn load_state(vault_path: &Path) -> VaultState {
+///
+/// # Errors
+///
+/// This function will return an error if the state file cannot be read or parsed.
+pub fn load_state(vault_path: &Path) -> std::io::Result<VaultState> {
     let state_file_path = vault_path.join("vault_state.json");
     if state_file_path.exists() {
-        let state_str = fs::read_to_string(state_file_path).expect("Failed to read state file");
-        serde_json::from_str(&state_str).expect("Failed to parse state file")
+        let state_str = fs::read_to_string(state_file_path)?;
+        serde_json::from_str(&state_str).map_err(std::io::Error::other)
     } else {
-        VaultState::default()
+        Ok(VaultState::default())
     }
 }
 
 /// Saves the state to a specific vault path.
-pub fn save_state(vault_path: &Path, state: &VaultState) {
+///
+/// # Errors
+///
+/// This function will return an error if the state file cannot be written to.
+pub fn save_state(vault_path: &Path, state: &VaultState) -> std::io::Result<()> {
     let state_file_path = vault_path.join("vault_state.json");
-    let state_str = serde_json::to_string_pretty(state).expect("Failed to serialize state");
-    fs::write(state_file_path, state_str).expect("Failed to write state file");
+    let state_str =
+        serde_json::to_string_pretty(state).map_err(std::io::Error::other)?;
+    fs::write(state_file_path, state_str)
 }

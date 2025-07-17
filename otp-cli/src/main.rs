@@ -130,13 +130,22 @@ fn main() {
     let cli = Cli::parse();
 
     let vault_path = match &cli.command {
-        Commands::Vault { command: VaultCommands::Init } => {
-             cli.vault.expect("The --vault path is required for 'vault init'")
-        }
+        Commands::Vault {
+            command: VaultCommands::Init,
+        } => cli.vault.unwrap_or_else(|| {
+            error!("The --vault path is required for 'vault init'");
+            std::process::exit(1);
+        }),
         _ => {
-            let path = cli.vault.expect("A --vault path is required for this command.");
+            let path = cli.vault.unwrap_or_else(|| {
+                error!("A --vault path is required for this command.");
+                std::process::exit(1);
+            });
             if !path.exists() {
-                error!("Vault path '{}' does not exist. Please create it with 'vault init'.", path.display());
+                error!(
+                    "Vault path '{}' does not exist. Please create it with 'vault init'.",
+                    path.display()
+                );
                 std::process::exit(1);
             }
             path
@@ -147,15 +156,30 @@ fn main() {
         Commands::Vault { command } => match command {
             VaultCommands::Init => {
                 info!("Initializing new vault at '{}'", vault_path.display());
-                fs::create_dir_all(&vault_path).expect("Failed to create vault directory");
-                fs::create_dir_all(vault_path.join("pads/available")).expect("Failed to create pads directory");
-                fs::create_dir_all(vault_path.join("pads/used")).expect("Failed to create used pads directory");
+                if let Err(e) = fs::create_dir_all(&vault_path) {
+                    error!("Failed to create vault directory: {e}");
+                    std::process::exit(1);
+                }
+                if let Err(e) = fs::create_dir_all(vault_path.join("pads/available")) {
+                    error!("Failed to create pads directory: {e}");
+                    std::process::exit(1);
+                }
+                if let Err(e) = fs::create_dir_all(vault_path.join("pads/used")) {
+                    error!("Failed to create used pads directory: {e}");
+                    std::process::exit(1);
+                }
                 let initial_state = state_manager::VaultState::default();
-                state_manager::save_state(&vault_path, &initial_state);
+                if let Err(e) = state_manager::save_state(&vault_path, &initial_state) {
+                    error!("Failed to save initial state: {e}");
+                    std::process::exit(1);
+                }
                 info!("Vault initialized successfully.");
             }
             VaultCommands::Status => {
-                let state = state_manager::load_state(&vault_path);
+                let state = state_manager::load_state(&vault_path).unwrap_or_else(|e| {
+                    error!("Failed to load vault state: {e}");
+                    std::process::exit(1);
+                });
                 let available_pads = state.pads.values().filter(|p| !p.is_fully_used).count();
                 let used_pads = state.pads.len() - available_pads;
                 let total_pads = state.pads.len();
@@ -178,7 +202,10 @@ fn main() {
             }
         },
         Commands::Pad { command } => {
-            let mut state = state_manager::load_state(&vault_path);
+            let mut state = state_manager::load_state(&vault_path).unwrap_or_else(|e| {
+                error!("Failed to load vault state: {e}");
+                std::process::exit(1);
+            });
             match command {
                 PadCommands::Generate { size, count } => {
                     info!("Generating {count} new pad(s) of {size} MB each...");
@@ -197,8 +224,11 @@ fn main() {
                         }
 
                     }
-                    state_manager::save_state(&vault_path, &state);
-                    info!("Successfully generated and registered {count} pad(s).");
+                    if let Err(e) = state_manager::save_state(&vault_path, &state) {
+                        error!("Failed to save state after generating pads: {e}");
+                    } else {
+                        info!("Successfully generated and registered {count} pad(s).");
+                    }
                 }
                 PadCommands::List => {
                     if state.pads.is_empty() {
@@ -225,16 +255,22 @@ fn main() {
                         match fs::remove_file(&pad_path) {
                             Ok(_) => {
                                 state.pads.remove(pad_id);
-                                state_manager::save_state(&vault_path, &state);
-                                println!("Successfully deleted pad '{}' and its file '{}'", pad_id, pad_path.display());
+                                if let Err(e) = state_manager::save_state(&vault_path, &state) {
+                                    error!("Failed to save state after deleting pad: {e}");
+                                } else {
+                                    println!("Successfully deleted pad '{}' and its file '{}'", pad_id, pad_path.display());
+                                }
                             }
                             Err(e) => {
                                 if e.kind() == std::io::ErrorKind::NotFound {
                                     state.pads.remove(pad_id);
-                                    state_manager::save_state(&vault_path, &state);
-                                    println!("Pad file not found at '{}', but removed it from the state. The vault may be inconsistent.", pad_path.display());
+                                     if let Err(e) = state_manager::save_state(&vault_path, &state) {
+                                        error!("Failed to save state after removing non-existent pad file: {e}");
+                                     } else {
+                                        println!("Pad file not found at '{}', but removed it from the state. The vault may be inconsistent.", pad_path.display());
+                                     }
                                 } else {
-                                    println!("Failed to delete pad file '{}': {}", pad_path.display(), e);
+                                    error!("Failed to delete pad file '{}': {e}", pad_path.display());
                                 }
                             }
                         }
@@ -244,35 +280,49 @@ fn main() {
                 }
             }
         },
-        Commands::Encrypt { input, output, pad_id, offset } => {
-            let mut state = state_manager::load_state(&vault_path);
-            let input_file_size = fs::metadata(input).expect("Failed to get input file metadata").len() as usize;
-            
+        Commands::Encrypt {
+            input,
+            output,
+            pad_id,
+            offset,
+        } => {
+            let mut state = state_manager::load_state(&vault_path).unwrap_or_else(|e| {
+                error!("Failed to load vault state: {e}");
+                std::process::exit(1);
+            });
+            let input_file_size = fs::metadata(input)
+                .map(|m| m.len() as usize)
+                .unwrap_or_else(|e| {
+                    error!("Failed to get input file metadata: {e}");
+                    std::process::exit(1);
+                });
+
             let output = output.clone().unwrap_or_else(|| {
                 let mut new_path = input.as_os_str().to_owned();
                 new_path.push(".enc");
                 PathBuf::from(new_path)
             });
 
-            let pad_id_to_use = match pad_id {
-                Some(id) => id.clone(),
-                None => {
-                    let found_pad = state.pads.values()
-                        .find(|p| p.find_available_segment(input_file_size).is_some());
-                    
-                    match found_pad {
-                        Some(pad) => {
-                            println!("Automatically selected pad '{}'", pad.id);
-                            pad.id.clone()
-                        }
-                        None => {
-                            error!("Could not find an available pad with enough contiguous space ({input_file_size} bytes).");
-                            error!("Please generate a new pad with 'pad generate'.");
-                            std::process::exit(1);
-                        }
-                    }
-                }
-            };
+            let pad_id_to_use = pad_id.map_or_else(
+                || {
+                    state
+                        .pads
+                        .values()
+                        .find(|p| p.find_available_segment(input_file_size).is_some())
+                        .map_or_else(
+                            || {
+                                error!("Could not find an available pad with enough contiguous space ({input_file_size} bytes).");
+                                error!("Please generate a new pad with 'pad generate'.");
+                                std::process::exit(1);
+                            },
+                            |pad| {
+                                println!("Automatically selected pad '{}'", pad.id);
+                                pad.id.clone()
+                            },
+                        )
+                },
+                |id| id.clone(),
+            );
 
             if let Some(pad) = state.pads.get_mut(&pad_id_to_use) {
                 if pad.is_fully_used {
@@ -297,32 +347,52 @@ fn main() {
                         }
                         *offset_val
                     }
-                    None => {
-                        pad.find_available_segment(input_file_size).unwrap_or_else(|| {
+                    None => pad
+                        .find_available_segment(input_file_size)
+                        .unwrap_or_else(|| {
                             error!("Not enough contiguous space left in pad '{pad_id_to_use}' to encrypt this file.");
                             std::process::exit(1);
-                        })
-                    }
+                        }),
                 };
 
                 info!("Encrypting '{}' with pad '{}' starting at byte {}.", input.display(), pad_id_to_use, start_byte);
 
                 let pad_path = vault_path.join("pads/available").join(&pad.file_name);
-                let mut pad_file = fs::File::open(&pad_path).expect("Failed to open pad file");
-                pad_file.seek(SeekFrom::Start(start_byte as u64)).expect("Failed to seek in pad file");
+                let mut pad_file = fs::File::open(&pad_path).unwrap_or_else(|e| {
+                    error!("Failed to open pad file: {e}");
+                    std::process::exit(1);
+                });
+                if let Err(e) = pad_file.seek(SeekFrom::Start(start_byte as u64)) {
+                    error!("Failed to seek in pad file: {e}");
+                    std::process::exit(1);
+                }
                 let mut pad_segment = vec![0u8; input_file_size];
-                pad_file.read_exact(&mut pad_segment).expect("Failed to read pad segment");
+                if let Err(e) = pad_file.read_exact(&mut pad_segment) {
+                    error!("Failed to read pad segment: {e}");
+                    std::process::exit(1);
+                }
 
-                let input_file = fs::File::open(input).expect("Failed to open input file");
-                let mut output_file = fs::File::create(&output).expect("Failed to create output file");
+                let input_file = fs::File::open(input).unwrap_or_else(|e| {
+                    error!("Failed to open input file: {e}");
+                    std::process::exit(1);
+                });
+                let mut output_file = fs::File::create(&output).unwrap_or_else(|e| {
+                    error!("Failed to create output file: {e}");
+                    std::process::exit(1);
+                });
                 let mut hasher = Sha256::new();
 
                 let mut reader = std::io::BufReader::new(input_file);
                 let mut buffer = [0; 8192];
                 let mut total_bytes_processed = 0;
                 loop {
-                    let bytes_read = reader.read(&mut buffer).expect("Failed to read from input");
-                    if bytes_read == 0 { break; }
+                    let bytes_read = reader.read(&mut buffer).unwrap_or_else(|e| {
+                        error!("Failed to read from input: {e}");
+                        std::process::exit(1);
+                    });
+                    if bytes_read == 0 {
+                        break;
+                    }
 
                     let input_chunk = &buffer[..bytes_read];
                     let pad_chunk = &pad_segment[total_bytes_processed..total_bytes_processed + bytes_read];
@@ -332,7 +402,10 @@ fn main() {
                         processed_chunk.push(byte ^ pad_chunk[i]);
                     }
 
-                    output_file.write_all(&processed_chunk).expect("Failed to write to output");
+                    if let Err(e) = output_file.write_all(&processed_chunk) {
+                        error!("Failed to write to output: {e}");
+                        std::process::exit(1);
+                    }
                     hasher.update(&processed_chunk);
                     total_bytes_processed += bytes_read;
                 }
@@ -346,27 +419,42 @@ fn main() {
                     ciphertext_hash,
                 };
                 let metadata_path = format!("{}.metadata.json", output.display());
-                let metadata_str = serde_json::to_string_pretty(&metadata).expect("Failed to serialize metadata");
-                fs::write(&metadata_path, metadata_str).expect("Failed to write metadata file");
+                let metadata_str =
+                    serde_json::to_string_pretty(&metadata).unwrap_or_else(|e| {
+                        error!("Failed to serialize metadata: {e}");
+                        std::process::exit(1);
+                    });
+                if let Err(e) = fs::write(&metadata_path, metadata_str) {
+                    error!("Failed to write metadata file: {e}");
+                    std::process::exit(1);
+                }
 
-                pad.used_segments.push(state_manager::UsedSegment { start: start_byte, end: start_byte + input_file_size });
-                
+                pad.used_segments.push(state_manager::UsedSegment {
+                    start: start_byte,
+                    end: start_byte + input_file_size,
+                });
+
                 let total_used_bytes = pad.total_used_bytes();
                 let usage_percent = (total_used_bytes as f64 / pad.size as f64) * 100.0;
-                
+
                 pad.is_fully_used = pad.total_used_bytes() >= pad.size;
                 let is_full = pad.is_fully_used;
                 let file_name_clone = pad.file_name.clone();
-                state_manager::save_state(&vault_path, &state);
-                
-                println!("Pad '{}' is now {:.2}% used.", pad_id_to_use, usage_percent);
-                
+                if let Err(e) = state_manager::save_state(&vault_path, &state) {
+                    error!("Failed to save state after encryption: {e}");
+                }
+
+                println!("Pad '{pad_id_to_use}' is now {usage_percent:.2}% used.");
+
                 if is_full {
                     println!("Pad '{pad_id_to_use}' is now fully consumed. Moving to 'used' directory.");
-                    let old_pad_path = vault_path.join("pads/available").join(&file_name_clone);
+                    let old_pad_path =
+                        vault_path.join("pads/available").join(&file_name_clone);
                     let used_pad_path = vault_path.join("pads/used").join(&file_name_clone);
                     if old_pad_path.exists() {
-                        fs::rename(old_pad_path, used_pad_path).expect("Failed to move used pad");
+                        if let Err(e) = fs::rename(old_pad_path, used_pad_path) {
+                            error!("Failed to move used pad: {e}");
+                        }
                     }
                 }
 
@@ -374,31 +462,58 @@ fn main() {
                 println!("Decryption metadata saved to '{metadata_path}'");
 
             } else {
-                error!("Pad with ID '{}' not found.", pad_id_to_use);
+                error!("Pad with ID '{pad_id_to_use}' not found.");
             }
         }
-        Commands::Decrypt { input, output, metadata, pad_id, length, offset } => {
-            let mut state = state_manager::load_state(&vault_path);
-            
+        Commands::Decrypt {
+            input,
+            output,
+            metadata,
+            pad_id,
+            length,
+            offset,
+        } => {
+            let mut state = state_manager::load_state(&vault_path).unwrap_or_else(|e| {
+                error!("Failed to load vault state: {e}");
+                std::process::exit(1);
+            });
+
             let dec_info = if let Some(meta_path) = metadata {
-                let metadata_str = fs::read_to_string(meta_path).expect("Failed to read metadata file");
-                let meta: CiphertextMetadata = serde_json::from_str(&metadata_str).expect("Failed to parse metadata file");
+                let metadata_str = fs::read_to_string(meta_path)
+                    .unwrap_or_else(|e| {
+                        error!("Failed to read metadata file: {e}");
+                        std::process::exit(1);
+                    });
+                let meta: CiphertextMetadata = serde_json::from_str(&metadata_str).unwrap_or_else(|e| {
+                    error!("Failed to parse metadata file: {e}");
+                    std::process::exit(1);
+                });
 
                 let mut hasher = Sha256::new();
-                let mut ciphertext_file = fs::File::open(input).expect("Failed to open ciphertext file");
-                std::io::copy(&mut ciphertext_file, &mut hasher).expect("Failed to hash ciphertext");
+                let mut ciphertext_file = fs::File::open(input).unwrap_or_else(|e| {
+                    error!("Failed to open ciphertext file: {e}");
+                    std::process::exit(1);
+                });
+                if let Err(e) = std::io::copy(&mut ciphertext_file, &mut hasher) {
+                    error!("Failed to hash ciphertext: {e}");
+                    std::process::exit(1);
+                }
                 let calculated_hash = format!("{:x}", hasher.finalize());
 
                 if calculated_hash != meta.ciphertext_hash {
                     error!("Ciphertext hash does not match metadata hash. The file may be corrupt or tampered with. Aborting.");
                     return;
                 }
-                DecryptionInfo { pad_id: meta.pad_id, start_byte: meta.start_byte, length: meta.length }
+                DecryptionInfo {
+                    pad_id: meta.pad_id,
+                    start_byte: meta.start_byte,
+                    length: meta.length,
+                }
             } else {
                 DecryptionInfo {
-                    pad_id: pad_id.clone().unwrap(),
+                    pad_id: pad_id.clone().unwrap_or_default(),
                     start_byte: *offset,
-                    length: length.unwrap(),
+                    length: length.unwrap_or_default(),
                 }
             };
             
@@ -411,58 +526,103 @@ fn main() {
                      return;
                 }
 
-                let mut pad_file = fs::File::open(&pad_path).expect("Failed to open pad file");
-                pad_file.seek(SeekFrom::Start(dec_info.start_byte as u64)).expect("Failed to seek in pad file");
+                let mut pad_file = fs::File::open(&pad_path).unwrap_or_else(|e| {
+                    error!("Failed to open pad file: {e}");
+                    std::process::exit(1);
+                });
+                if let Err(e) = pad_file.seek(SeekFrom::Start(dec_info.start_byte as u64)) {
+                    error!("Failed to seek in pad file: {e}");
+                    std::process::exit(1);
+                }
                 let mut pad_segment = vec![0u8; dec_info.length];
-                pad_file.read_exact(&mut pad_segment).expect("Failed to read pad segment");
+                if let Err(e) = pad_file.read_exact(&mut pad_segment) {
+                    error!("Failed to read pad segment: {e}");
+                    std::process::exit(1);
+                }
 
-                let input_file = fs::File::open(input).expect("Failed to re-open input file");
-                let mut output_file = fs::File::create(output).expect("Failed to create output file");
-                
+                let input_file = fs::File::open(input).unwrap_or_else(|e| {
+                    error!("Failed to re-open input file: {e}");
+                    std::process::exit(1);
+                });
+                let mut output_file = fs::File::create(output).unwrap_or_else(|e| {
+                    error!("Failed to create output file: {e}");
+                    std::process::exit(1);
+                });
+
                 let mut reader = std::io::BufReader::new(input_file);
                 let mut buffer = [0; 8192];
                 let mut total_bytes_processed = 0;
                 loop {
-                    let bytes_read = reader.read(&mut buffer).expect("Failed to read from input");
-                    if bytes_read == 0 { break; }
+                    let bytes_read = reader.read(&mut buffer).unwrap_or_else(|e| {
+                        error!("Failed to read from input: {e}");
+                        std::process::exit(1);
+                    });
+                    if bytes_read == 0 {
+                        break;
+                    }
 
                     let input_chunk = &buffer[..bytes_read];
-                    let pad_chunk = &pad_segment[total_bytes_processed..total_bytes_processed + bytes_read];
-                    
+                    let pad_chunk =
+                        &pad_segment[total_bytes_processed..total_bytes_processed + bytes_read];
+
                     let mut processed_chunk = Vec::with_capacity(bytes_read);
                     for (i, &byte) in input_chunk.iter().enumerate() {
                         processed_chunk.push(byte ^ pad_chunk[i]);
                     }
 
-                    output_file.write_all(&processed_chunk).expect("Failed to write to output");
+                    if let Err(e) = output_file.write_all(&processed_chunk) {
+                        error!("Failed to write to output: {e}");
+                        std::process::exit(1);
+                    }
                     total_bytes_processed += bytes_read;
                 }
 
-                let new_segment = state_manager::UsedSegment { start: dec_info.start_byte, end: dec_info.start_byte + dec_info.length };
-                let mut state_changed = false;
-                if !pad.used_segments.iter().any(|s| s.start == new_segment.start && s.end == new_segment.end) {
+                let new_segment = state_manager::UsedSegment {
+                    start: dec_info.start_byte,
+                    end: dec_info.start_byte + dec_info.length,
+                };
+                let state_changed = if !pad
+                    .used_segments
+                    .iter()
+                    .any(|s| s.start == new_segment.start && s.end == new_segment.end)
+                {
                     pad.used_segments.push(new_segment);
-                    state_changed = true;
-                }
+                    true
+                } else {
+                    false
+                };
 
                 if state_changed {
                     let file_name_clone = pad.file_name.clone();
                     let was_available = !pad.is_fully_used;
                     pad.is_fully_used = pad.total_used_bytes() >= pad.size;
                     let is_full_now = pad.is_fully_used;
-                    state_manager::save_state(&vault_path, &state);
+                    if let Err(e) = state_manager::save_state(&vault_path, &state) {
+                        error!("Failed to save state after decryption: {e}");
+                    }
 
                     if is_full_now && was_available {
-                        println!("Pad '{}' is now fully consumed on receiver side. Moving to 'used' directory.", dec_info.pad_id);
-                        let old_pad_path = vault_path.join("pads/available").join(&file_name_clone);
-                        let used_pad_path = vault_path.join("pads/used").join(&file_name_clone);
+                        info!(
+                            "Pad '{}' is now fully consumed on receiver side. Moving to 'used' directory.",
+                            dec_info.pad_id
+                        );
+                        let old_pad_path =
+                            vault_path.join("pads/available").join(&file_name_clone);
+                        let used_pad_path =
+                            vault_path.join("pads/used").join(&file_name_clone);
                         if old_pad_path.exists() {
-                            fs::rename(old_pad_path, used_pad_path).expect("Failed to move used pad");
+                            if let Err(e) = fs::rename(old_pad_path, used_pad_path) {
+                                error!("Failed to move used pad: {e}");
+                            }
                         }
                     }
                 }
-                
-                println!("Successfully decrypted file '{}' to '{}'", input.display(), output.display());
+
+                println!(
+                    "Successfully decrypted file '{}' to '{}'",
+                    input.display(),
+                    output.display()
+                );
             } else {
                 error!("Pad with ID '{}' not found in vault.", dec_info.pad_id);
             }

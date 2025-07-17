@@ -63,20 +63,31 @@ struct MarkUsedRequest {
 async fn main() {
     let port = 3000;
     // Set up the vault path from an environment variable or use a default.
-    let vault_path = env::var("OTP_VAULT_PATH")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| PathBuf::from("./.otp_vault"));
+    let vault_path =
+        env::var("OTP_VAULT_PATH").map_or_else(|_| PathBuf::from("./.otp_vault"), PathBuf::from);
 
     println!("Using vault at: {}", vault_path.display());
 
     // Initialize the vault if it doesn't exist.
     if !vault_path.exists() {
         println!("Vault not found. Initializing new vault...");
-        fs::create_dir_all(&vault_path).expect("Failed to create vault directory");
-        fs::create_dir_all(vault_path.join("pads/available")).expect("Failed to create pads directory");
-        fs::create_dir_all(vault_path.join("pads/used")).expect("Failed to create used pads directory");
+        if let Err(e) = fs::create_dir_all(&vault_path) {
+            eprintln!("Failed to create vault directory: {e}");
+            std::process::exit(1);
+        }
+        if let Err(e) = fs::create_dir_all(vault_path.join("pads/available")) {
+            eprintln!("Failed to create pads directory: {e}");
+            std::process::exit(1);
+        }
+        if let Err(e) = fs::create_dir_all(vault_path.join("pads/used")) {
+            eprintln!("Failed to create used pads directory: {e}");
+            std::process::exit(1);
+        }
         let initial_state = state_manager::VaultState::default();
-        state_manager::save_state(&vault_path, &initial_state);
+        if let Err(e) = state_manager::save_state(&vault_path, &initial_state) {
+            eprintln!("Failed to save initial state: {e}");
+            std::process::exit(1);
+        }
         println!("Vault initialized successfully.");
     }
 
@@ -100,21 +111,40 @@ async fn main() {
 
     // Run the server.
     let addr = SocketAddr::from(([0, 0, 0, 0], port));
-    let my_local_ip = local_ip().unwrap();
+    let my_local_ip = local_ip().unwrap_or_else(|e| {
+        eprintln!("Failed to get local IP address: {e}");
+        "127.0.0.1".parse().unwrap()
+    });
 
     println!("listening on:");
     println!("  - http://{my_local_ip}:{port}/index.html");
     println!("  - http://127.0.0.1:{port}/index.html");
 
-    let listener = tokio::net::TcpListener::bind(&addr).await.unwrap();
-    axum::serve(listener, app).await.unwrap();
+    let listener = match tokio::net::TcpListener::bind(&addr).await {
+        Ok(listener) => listener,
+        Err(e) => {
+            eprintln!("Failed to bind to address: {e}");
+            return;
+        }
+    };
+    if let Err(e) = axum::serve(listener, app).await {
+        eprintln!("Server error: {e}");
+    }
 }
 
 /// Returns the status of the OTP vault.
 async fn get_vault_status(
     State(state): State<Arc<AppState>>,
 ) -> (StatusCode, Json<Value>) {
-    let vault_state = state_manager::load_state(&state.vault_path);
+    let vault_state = match state_manager::load_state(&state.vault_path) {
+        Ok(vs) => vs,
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({ "error": format!("Failed to load vault state: {}", e) })),
+            );
+        }
+    };
 
     let available_pads = vault_state.pads.values().filter(|p| !p.is_fully_used).count();
     let used_pads = vault_state.pads.len() - available_pads;
@@ -141,7 +171,15 @@ async fn generate_pads_handler(
     State(state): State<Arc<AppState>>,
     Json(payload): Json<GeneratePadRequest>,
 ) -> (StatusCode, Json<Value>) {
-    let mut vault_state = state_manager::load_state(&state.vault_path);
+    let mut vault_state = match state_manager::load_state(&state.vault_path) {
+        Ok(vs) => vs,
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({ "error": format!("Failed to load vault state: {}", e) })),
+            );
+        }
+    };
     let mut new_pad_ids = Vec::new();
 
     for _ in 0..payload.count {
@@ -164,14 +202,27 @@ async fn generate_pads_handler(
         }
     }
 
-    state_manager::save_state(&state.vault_path, &vault_state);
+    if let Err(e) = state_manager::save_state(&state.vault_path, &vault_state) {
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({ "error": format!("Failed to save state: {}", e) })),
+        );
+    }
     (StatusCode::CREATED, Json(json!({ "pad_ids": new_pad_ids })))
 }
 
 async fn list_pads_handler(
     State(state): State<Arc<AppState>>,
 ) -> (StatusCode, Json<Value>) {
-    let vault_state = state_manager::load_state(&state.vault_path);
+    let vault_state = match state_manager::load_state(&state.vault_path) {
+        Ok(vs) => vs,
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({ "error": format!("Failed to load vault state: {}", e) })),
+            );
+        }
+    };
     let pads: Vec<&state_manager::Pad> = vault_state.pads.values().collect();
     (StatusCode::OK, Json(json!(pads)))
 }
@@ -180,7 +231,15 @@ async fn delete_pad_handler(
     State(state): State<Arc<AppState>>,
     axum::extract::Path(pad_id): axum::extract::Path<String>,
 ) -> (StatusCode, Json<Value>) {
-    let mut vault_state = state_manager::load_state(&state.vault_path);
+    let mut vault_state = match state_manager::load_state(&state.vault_path) {
+        Ok(vs) => vs,
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({ "error": format!("Failed to load vault state: {}", e) })),
+            );
+        }
+    };
 
     if let Some(pad_to_delete) = vault_state.pads.get(&pad_id) {
         let pad_dir = if pad_to_delete.is_fully_used { "used" } else { "available" };
@@ -189,13 +248,23 @@ async fn delete_pad_handler(
         match fs::remove_file(&pad_path) {
             Ok(_) => {
                 vault_state.pads.remove(&pad_id);
-                state_manager::save_state(&state.vault_path, &vault_state);
+                if let Err(e) = state_manager::save_state(&state.vault_path, &vault_state) {
+                    return (
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        Json(json!({ "error": format!("Failed to save state: {}", e) })),
+                    );
+                }
                 (StatusCode::OK, Json(json!({ "message": "Pad deleted successfully" })))
             }
             Err(e) => {
                 if e.kind() == std::io::ErrorKind::NotFound {
                     vault_state.pads.remove(&pad_id);
-                    state_manager::save_state(&state.vault_path, &vault_state);
+                    if let Err(e) = state_manager::save_state(&state.vault_path, &vault_state) {
+                        return (
+                            StatusCode::INTERNAL_SERVER_ERROR,
+                            Json(json!({ "error": format!("Failed to save state: {}", e) })),
+                        );
+                    }
                      (StatusCode::OK, Json(json!({ "message": "Pad file not found, but removed from state" })))
                 } else {
                     (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({ "error": format!("Failed to delete pad file: {}", e) })))
@@ -212,7 +281,15 @@ async fn request_segment_handler(
     State(state): State<Arc<AppState>>,
     Json(payload): Json<RequestSegmentRequest>,
 ) -> (StatusCode, Json<Value>) {
-    let vault_state = state_manager::load_state(&state.vault_path);
+    let vault_state = match state_manager::load_state(&state.vault_path) {
+        Ok(vs) => vs,
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({ "error": format!("Failed to load vault state: {}", e) })),
+            );
+        }
+    };
     let pad_id_to_use = match payload.pad_id {
         Some(id) => id,
         None => {
@@ -227,7 +304,15 @@ async fn request_segment_handler(
         if let Some(start) = pad.find_available_segment(payload.length) {
             let pad_dir = if pad.is_fully_used { "used" } else { "available" };
             let pad_path = state.vault_path.join("pads").join(pad_dir).join(&pad.file_name);
-            let pad_data = fs::read(&pad_path).unwrap();
+            let pad_data = match fs::read(&pad_path) {
+                Ok(data) => data,
+                Err(e) => {
+                    return (
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        Json(json!({ "error": format!("Failed to read pad file: {e}") })),
+                    )
+                }
+            };
             let segment_data = pad_data[start..start + payload.length].to_vec();
 
             let response = RequestSegmentResponse {
@@ -248,20 +333,38 @@ async fn mark_used_handler(
     State(state): State<Arc<AppState>>,
     Json(payload): Json<MarkUsedRequest>,
 ) -> (StatusCode, Json<Value>) {
-    let mut vault_state = state_manager::load_state(&state.vault_path);
+    let mut vault_state = match state_manager::load_state(&state.vault_path) {
+        Ok(vs) => vs,
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({ "error": format!("Failed to load vault state: {}", e) })),
+            );
+        }
+    };
     if let Some(pad) = vault_state.pads.get_mut(&payload.pad_id) {
         pad.used_segments.push(state_manager::UsedSegment { start: payload.start, end: payload.end });
         pad.is_fully_used = pad.total_used_bytes() >= pad.size;
         let is_full = pad.is_fully_used;
         let file_name_clone = pad.file_name.clone();
 
-        state_manager::save_state(&state.vault_path, &vault_state);
+        if let Err(e) = state_manager::save_state(&state.vault_path, &vault_state) {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({ "error": format!("Failed to save state: {}", e) })),
+            );
+        }
 
         if is_full {
              let old_pad_path = state.vault_path.join("pads/available").join(&file_name_clone);
             let used_pad_path = state.vault_path.join("pads/used").join(&file_name_clone);
             if old_pad_path.exists() {
-                fs::rename(old_pad_path, used_pad_path).expect("Failed to move used pad");
+                if let Err(e) = fs::rename(old_pad_path, used_pad_path) {
+                    return (
+                        StatusCode::INTERNAL_SERVER_ERROR,
+                        Json(json!({ "error": format!("Failed to move used pad: {e}") })),
+                    );
+                }
             }
         }
         (StatusCode::OK, Json(json!({ "message": "Pad segment marked as used" })))
@@ -274,7 +377,16 @@ async fn download_pad_handler(
     State(state): State<Arc<AppState>>,
     axum::extract::Path(pad_id): axum::extract::Path<String>,
 ) -> impl IntoResponse {
-    let vault_state = state_manager::load_state(&state.vault_path);
+    let vault_state = match state_manager::load_state(&state.vault_path) {
+        Ok(vs) => vs,
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                format!("Failed to load vault state: {}", e),
+            )
+                .into_response();
+        }
+    };
     if let Some(pad) = vault_state.pads.get(&pad_id) {
         let pad_dir = if pad.is_fully_used { "used" } else { "available" };
         let pad_path = state.vault_path.join("pads").join(pad_dir).join(&pad.file_name);
@@ -297,12 +409,37 @@ async fn upload_pads_handler(
     State(state): State<Arc<AppState>>,
     mut multipart: Multipart,
 ) -> (StatusCode, Json<Value>) {
-    let mut vault_state = state_manager::load_state(&state.vault_path);
+    let mut vault_state = match state_manager::load_state(&state.vault_path) {
+        Ok(vs) => vs,
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({ "error": format!("Failed to load vault state: {}", e) })),
+            );
+        }
+    };
     let mut imported_pads = Vec::new();
 
-    while let Some(field) = multipart.next_field().await.unwrap() {
+    while let Some(field_result) = multipart.next_field().await {
+        let field = match field_result {
+            Ok(field) => field,
+            Err(e) => {
+                return (
+                    StatusCode::BAD_REQUEST,
+                    Json(json!({ "error": format!("Failed to get multipart field: {e}") })),
+                );
+            }
+        };
         let file_name = field.file_name().unwrap_or("unknown.pad").to_string();
-        let data = field.bytes().await.unwrap();
+        let data = match field.bytes().await {
+            Ok(data) => data,
+            Err(e) => {
+                return (
+                    StatusCode::BAD_REQUEST,
+                    Json(json!({ "error": format!("Failed to get field data: {e}") })),
+                );
+            }
+        };
         let size_in_bytes = data.len();
 
         // Basic validation: ensure it's a .pad file
@@ -325,7 +462,12 @@ async fn upload_pads_handler(
         }
     }
 
-    state_manager::save_state(&state.vault_path, &vault_state);
+    if let Err(e) = state_manager::save_state(&state.vault_path, &vault_state) {
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({ "error": format!("Failed to save state: {}", e) })),
+        );
+    }
     (StatusCode::OK, Json(json!({ "imported_pads": imported_pads })))
 }
 
@@ -342,24 +484,59 @@ async fn static_path(uri: Uri) -> impl IntoResponse {
             axum::response::Response::builder()
                 .header(header::CONTENT_TYPE, mime.as_ref())
                 .body(body)
-                .unwrap()
+                .unwrap_or_else(|_| {
+                    axum::response::Response::builder()
+                        .status(StatusCode::INTERNAL_SERVER_ERROR)
+                        .body(Body::empty())
+                        .unwrap()
+                })
         }
         None => axum::response::Response::builder()
             .status(StatusCode::NOT_FOUND)
             .body(Body::empty())
-            .unwrap(),
+            .unwrap_or_else(|_| {
+                axum::response::Response::builder()
+                    .status(StatusCode::INTERNAL_SERVER_ERROR)
+                    .body(Body::empty())
+                    .unwrap()
+            }),
     }
 }
 
 async fn clear_vault_handler(
     State(state): State<Arc<AppState>>,
 ) -> (StatusCode, Json<Value>) {
-    fs::remove_dir_all(&state.vault_path).unwrap();
-    fs::create_dir_all(&state.vault_path).expect("Failed to create vault directory");
-    fs::create_dir_all(state.vault_path.join("pads/available")).expect("Failed to create pads directory");
-    fs::create_dir_all(state.vault_path.join("pads/used")).expect("Failed to create used pads directory");
+    if let Err(e) = fs::remove_dir_all(&state.vault_path) {
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({ "error": format!("Failed to remove vault directory: {e}") })),
+        );
+    }
+    if let Err(e) = fs::create_dir_all(&state.vault_path) {
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({ "error": format!("Failed to create vault directory: {e}") })),
+        );
+    }
+    if let Err(e) = fs::create_dir_all(state.vault_path.join("pads/available")) {
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({ "error": format!("Failed to create pads directory: {e}") })),
+        );
+    }
+    if let Err(e) = fs::create_dir_all(state.vault_path.join("pads/used")) {
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({ "error": format!("Failed to create used pads directory: {e}") })),
+        );
+    }
     let initial_state = state_manager::VaultState::default();
-    state_manager::save_state(&state.vault_path, &initial_state);
+    if let Err(e) = state_manager::save_state(&state.vault_path, &initial_state) {
+        return (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({ "error": format!("Failed to save initial state: {}", e) })),
+        );
+    }
     (StatusCode::OK, Json(json!({ "message": "Vault cleared successfully" })))
 }
 

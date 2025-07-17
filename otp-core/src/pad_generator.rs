@@ -12,6 +12,10 @@ use std::io::Write;
 /// # Returns
 ///
 /// A `std::io::Result<()>` which is `Ok(())` on success and `Err` on failure.
+///
+/// # Errors
+///
+/// This function will return an error if the pad file cannot be created or written to.
 pub fn generate_pad(path: &str, size: usize) -> std::io::Result<()> {
     let mut rng = OsRng;
     let mut buffer = vec![0u8; size];
