@@ -28,9 +28,11 @@ We welcome contributions from the community. If you would like to contribute to 
 3.  Make your changes and ensure that all tests pass.
 4.  Submit a pull request with a clear description of your changes.
 
+**Note on Build Artifacts**: This project uses a `.gitignore` file to exclude build artifacts (the `target` directory) from the repository. Please ensure you do not force-add these files to your commits.
+
 ## 📜 License
 
-This project is licensed under the terms of the MIT license. See the [LICENSE](LICENSE) file for more details.
+This project is licensed under the terms of the MIT license. See the [LICENSE](LICENSE.md) file for more details.
 
 ## 🏁 Getting Started
 
