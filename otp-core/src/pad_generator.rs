@@ -1,3 +1,13 @@
+// File:    pad_generator.rs
+// Author:  apezoo
+// Date:    2025-07-17
+//
+// Description: Provides functionality for generating high-quality one-time pads for cryptographic use.
+//
+// License:
+// This project is licensed under the terms of the GNU AGPLv3 license.
+// See the LICENSE.md file in the project root for full license information.
+
 use rand::{rngs::OsRng, TryRngCore};
 use std::fs::File;
 use std::io::Write;

@@ -1,3 +1,13 @@
+// File:    main.rs
+// Author:  apezoo
+// Date:    2025-07-17
+//
+// Description: The entry point and main logic for the command-line interface (CLI) of the OTP application.
+//
+// License:
+// This project is licensed under the terms of the GNU AGPLv3 license.
+// See the LICENSE.md file in the project root for full license information.
+
 #![deny(missing_docs)]
 #![allow(clippy::cast_precision_loss, clippy::too_many_lines, clippy::cognitive_complexity)]
 //! A command-line interface for the OTP encryption tool.

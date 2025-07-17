@@ -1,3 +1,13 @@
+// File:    main.rs
+// Author:  apezoo
+// Date:    2025-07-17
+//
+// Description: The entry point and main logic for the web-based interface (GUI) of the OTP application.
+//
+// License:
+// This project is licensed under the terms of the GNU AGPLv3 license.
+// See the LICENSE.md file in the project root for full license information.
+
 #![deny(missing_docs)]
 //! A web server for the OTP encryption tool, providing a user-friendly interface.
 

@@ -1,3 +1,4 @@
+<!-- Author: apezoo -->
 # One-Time Pad (OTP) Encryption Tool
 
 ![Rust OTP App Screenshot with Pads](./docs/images/screenshot-with-pads.png)

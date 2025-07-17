@@ -1,3 +1,13 @@
+// File:    state_manager.rs
+// Author:  apezoo
+// Date:    2025-07-17
+//
+// Description: Manages the state of one-time pads, ensuring they are not reused.
+//
+// License:
+// This project is licensed under the terms of the GNU AGPLv3 license.
+// See the LICENSE.md file in the project root for full license information.
+
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
