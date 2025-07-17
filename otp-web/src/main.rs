@@ -3,9 +3,9 @@
 
 use axum::{
     body::Body,
-    extract::{Multipart, State},
-    http::{header, StatusCode},
-    response::{IntoResponse, Json},
+    extract::{Multipart, State, Path},
+    http::{header, HeaderValue, StatusCode, Uri},
+    response::{IntoResponse, Json, Redirect},
     routing::{delete, get, post},
     Router,
 };
@@ -20,6 +20,8 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use tower_http::cors::CorsLayer;
 use uuid::Uuid;
+
+include!(concat!(env!("OUT_DIR"), "/static-files.rs"));
 
 /// Shared application state
 #[derive(Clone)]
@@ -88,9 +90,10 @@ async fn main() {
         .route("/api/pads/request_segment", post(request_segment_handler))
         .route("/api/pads/mark_used", post(mark_used_handler))
         .route("/api/vault/clear", post(clear_vault_handler))
+        .route("/", get(|| async { Redirect::permanent("/index.html") }))
         .with_state(app_state)
         .layer(CorsLayer::permissive())
-        .fallback_service(tower_http::services::ServeDir::new("../static"));
+        .fallback(static_path);
 
     // Run the server.
     let addr = SocketAddr::from(([0, 0, 0, 0], port));
@@ -316,6 +319,29 @@ async fn upload_pads_handler(
         if fs::write(&pad_path, &data).is_ok() {
             vault_state.add_pad(pad_id.clone(), file_name, size_in_bytes);
             imported_pads.push(pad_id);
+        }
+        
+        async fn static_path(uri: Uri) -> impl IntoResponse {
+            let mut path = uri.path().trim_start_matches('/').to_string();
+            if path.is_empty() {
+                path = "index.html".to_string();
+            }
+        
+            match static_files::get(&path) {
+                Some(file) => {
+                    let mime_type = mime_guess::from_path(&path).first_or_octet_stream();
+                    let body = Body::from(file.content);
+                    axum::response::Response::builder()
+                        .status(StatusCode::OK)
+                        .header(header::CONTENT_TYPE, HeaderValue::from_str(mime_type.as_ref()).unwrap())
+                        .body(body)
+                        .unwrap()
+                }
+                None => axum::response::Response::builder()
+                    .status(StatusCode::NOT_FOUND)
+                    .body(Body::empty())
+                    .unwrap(),
+            }
         }
     }
 
