@@ -1,1 +1,8 @@
-/target/
+# Ignore all target directories
+**/target/
+
+# Tauri-specific ignores
+/src-tauri/Cargo.lock
+
+# Rustfmt backup files
+**/*.rs.bk
