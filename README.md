@@ -54,7 +54,7 @@ For more detailed information about the architecture and usage of each component
   - [**ARCHITECTURE**](otp-core/ARCHITECTURE.md): In-depth technical design of the core components.
 
 - **Command-Line Interface (`otp-cli`)**
-  - [**ARCHITECTURE**](otp-cli/ARCHITECTURE.md): Design and command structure of the CLI tool.
+  - [**ARCHITECTURE**](otp-core/ARCHITECTURE.md): Design and command structure of the CLI tool.
 
 - **Web Application (`otp-web`)**
   - [**README**](otp-web/README.md): Setup and usage for the web interface.

@@ -1,4 +1,4 @@
-# OTP-CLI Architecture
+# OTP-Core Architecture
 
 This document outlines the architecture for the `otp-cli` application, a commercial-grade tool for one-time pad (OTP) encryption.
 
@@ -64,7 +64,6 @@ The enhanced metadata structure is as follows:
   "pad_id": "string",
   "start_byte": "usize",
   "length": "usize",
-  "ciphertext_hash": "string (SHA-256)"
 }
 ```
 
@@ -147,14 +146,6 @@ Both parties now have an identical set of pads and an identical initial state.
     b. Decrypt the message using the correct pad segment.
     c. **Update the receiver's state file** to mark the pad segment as used, ensuring both parties remain synchronized.
     
-## 7. Graphical User Interface (GUI)
-
-A separate GUI application will be developed to provide a user-friendly interface for the core OTP functionality.
-
--   **Technology**: The GUI will be built using the [Tauri](https://tauri.app/) framework, leveraging web technologies (HTML, CSS, JavaScript) for the frontend.
--   **Architecture**: The GUI is a **wrapper** around the `otp-cli` application. It will execute the CLI commands in the background and present the results to the user in a graphical format.
--   **Distribution**: The `otp-cli` and `otp-gui` will be two separate deliverables. The GUI application will be packaged with a copy of the CLI executable or will expect it to be available in the system's PATH. This maintains a clean separation between the core command-line tool and the optional graphical interface.
-
-## 8. Automated Releases
+## 7. Automated Releases
 
 The project is configured with a GitHub Actions workflow that automatically builds and releases pre-compiled binaries for Windows and Linux. This ensures that users can easily download and use the `otp-cli` tool without needing to set up a Rust development environment. The binaries are published to the GitHub Releases page upon tagging a new version.
