@@ -11,9 +11,16 @@ This repository provides a robust and secure suite of tools for one-time pad (OT
 -   **State Management**: The system intelligently manages the state of the one-time pads, ensuring that no part of a pad is ever reused.
 -   **Streaming Support**: Efficiently encrypt and decrypt large files using a streaming approach, minimizing memory usage.
 
-## 릴리스
+## Releases
 
-Pre-compiled binaries for Windows and Linux are available for download from the [GitHub Releases page](https://github.com/your-repo/releases). This is the recommended way to get started with the tools.
+Pre-compiled binaries for our v1.0.0 release are provided below. For future updates, please check the [GitHub Releases page](https://github.com/your-repo/releases).
+
+| Platform | File                 | SHA256 Checksum                                                        |
+| :------- | :------------------- | :--------------------------------------------------------------------- |
+| Linux    | `otp-cli`            | `0de1b9e896b1674f15a9e06bd13d15aa2dfb8e7fd3dd6ca65f6f284800788bbd`        |
+| Windows  | `otp-cli.exe`        | `fe8d6b4f8fb9b128c38f2d7bbc86f6d07d69112fe8d5230db0368c9f040150f6`        |
+| Linux    | `otp-web`            | `6ffcf45952d0a042170e3d9c0aa57fb13c8285a009671d50e1f3acf9965173a5`        |
+| Windows  | `otp-web.exe`        | `c7b9b1de965d53a723bc0ad65e1fc77cad951559579e1b1883c4d55e57233be2`        |
 
 ## 🛡️ Security
 
