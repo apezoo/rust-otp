@@ -1,5 +1,5 @@
 [package]
-name = "otp-cli"
+name = "otp-web"
 version = "0.1.0"
 edition = "2024"
 [lints]
@@ -7,10 +7,10 @@ workspace = true
 
 [dependencies]
 otp-core = { path = "../otp-core" }
-clap = { version = "4.5.41", features = ["derive"] }
-env_logger = "0.11.8"
-log = "0.4.27"
+axum = { version = "0.7.5", features = ["multipart"] }
+tokio = { version = "1.37.0", features = ["full"] }
 serde = { version = "1.0.219", features = ["derive"] }
 serde_json = "1.0.140"
-sha2 = "0.10.8"
+tower-http = { version = "0.5.2", features = ["fs", "cors"] }
+local-ip-address = "0.6.1"
 uuid = { version = "1.8", features = ["v4"] }

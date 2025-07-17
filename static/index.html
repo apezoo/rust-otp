@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>OTP Web UI</title>
+    <script src="/main.js" type="module"></script>
+    <style>
+        body { font-family: sans-serif; margin: 2em; }
+        textarea { width: 100%; height: 100px; }
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 2em; }
+        .col { padding: 1em; border: 1px solid #ccc; }
+    </style>
+</head>
+<body>
+    <h1>OTP Web UI (Client-Side Encryption)</h1>
+    <div id="vault-status"></div>
+    <hr>
+    <h2>Pad Management</h2>
+    <button id="generate-pad-btn">Generate Pad</button>
+    <button id="list-pads-btn">List Pads</button>
+    <button id="clear-vault-btn">Clear Vault</button>
+    <h3>Upload Pads</h3>
+    <input type="file" id="upload-pads-input" multiple>
+    <button id="upload-pads-btn">Upload</button>
+    <hr>
+    <div id="pads-list"></div>
+    <hr>
+    <div class="grid">
+        <div class="col">
+            <h2>Encrypt</h2>
+            <hr>
+            <h3>Encrypt Text</h3>
+            <textarea id="encrypt-text-input" placeholder="Enter text to encrypt"></textarea>
+            <button id="encrypt-text-btn">Encrypt Text</button>
+            <hr>
+            <h3>Encrypt File</h3>
+            <input type="file" id="encrypt-file-input">
+            <button id="encrypt-file-btn">Encrypt File</button>
+        </div>
+        <div class="col">
+            <h2>Decrypt</h2>
+            <hr>
+            <h3>Decrypt Text</h3>
+            <textarea id="decrypt-text-input" placeholder="Paste JSON payload to decrypt"></textarea>
+            <button id="decrypt-text-btn">Decrypt Text</button>
+            <hr>
+            <h3>Decrypt File</h3>
+            <label for="decrypt-file-input">Encrypted File:</label>
+            <input type="file" id="decrypt-file-input" >
+            <br>
+            <label for="decrypt-metadata-file-input">Metadata File (optional):</label>
+            <input type="file" id="decrypt-metadata-file-input">
+            <button id="decrypt-file-btn">Decrypt File</button>
+        </div>
+    </div>
+</body>
+</html>

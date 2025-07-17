@@ -1,16 +1,19 @@
 [package]
-name = "otp-cli"
+name = "otp-core"
 version = "0.1.0"
 edition = "2024"
 [lints]
 workspace = true
 
 [dependencies]
-otp-core = { path = "../otp-core" }
-clap = { version = "4.5.41", features = ["derive"] }
-env_logger = "0.11.8"
 log = "0.4.27"
+rand = "0.9.1"
 serde = { version = "1.0.219", features = ["derive"] }
 serde_json = "1.0.140"
 sha2 = "0.10.8"
 uuid = { version = "1.8", features = ["v4"] }
+
+[dev-dependencies]
+assert_cmd = "2.0"
+predicates = "3.1"
+tempfile = "3.10"

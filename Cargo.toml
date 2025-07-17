@@ -1,0 +1,42 @@
+[workspace]
+resolver = "2"
+members = [
+    "otp-core",
+    "otp-cli", "otp-web",
+]
+
+[workspace.lints.rust]
+unsafe_code = "deny"
+warnings = "deny"
+missing_docs = "deny"
+unreachable_pub = "deny"
+rust_2018_idioms = "deny"
+
+[workspace.lints.clippy]
+all = "deny"
+pedantic = "deny"
+nursery = "deny"
+cargo = "deny"
+unwrap_used = "warn"
+expect_used = "warn"
+todo = "warn"
+dbg_macro = "warn"
+
+[profile.dev]
+opt-level = 0
+debug = 2
+overflow-checks = true
+incremental = true
+debug-assertions = true
+lto = false
+codegen-units = 256
+panic = "unwind"
+
+[profile.release]
+opt-level = 3
+debug = 1
+overflow-checks = true
+lto = "fat"
+codegen-units = 1
+strip = "symbols"
+panic = "abort"

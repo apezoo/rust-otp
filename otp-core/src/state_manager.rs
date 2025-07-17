@@ -6,17 +6,24 @@ use std::path::Path;
 /// Represents a segment of a pad that has been used.
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct UsedSegment {
+    /// The starting byte (inclusive) of the used segment.
     pub start: usize,
+    /// The ending byte (exclusive) of the used segment.
     pub end: usize,
 }
 
 /// Represents the state of a single one-time pad file.
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Pad {
+    /// A unique identifier for the pad.
     pub id: String,
+    /// The name of the file containing the pad data.
     pub file_name: String,
+    /// The total size of the pad in bytes.
     pub size: usize,
+    /// A list of segments that have been used.
     pub used_segments: Vec<UsedSegment>,
+    /// Whether the pad has been fully consumed.
     pub is_fully_used: bool,
 }
 
@@ -91,6 +98,7 @@ impl Pad {
 /// Represents the state of an OTP Vault.
 #[derive(Serialize, Deserialize, Debug, Default)]
 pub struct VaultState {
+    /// A map of pad IDs to their corresponding `Pad` state.
     pub pads: HashMap<String, Pad>,
 }
 

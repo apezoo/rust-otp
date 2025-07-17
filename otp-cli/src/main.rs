@@ -1,3 +1,6 @@
+#![deny(missing_docs)]
+//! A command-line interface for the OTP encryption tool.
+
 use clap::{Parser, Subcommand};
 use log::{info, error};
 use std::fs;
@@ -6,8 +9,8 @@ use sha2::{Sha256, Digest};
 use std::io::{Read, Write, Seek, SeekFrom};
 use uuid::Uuid;
 
-use otp_cli::state_manager;
-use otp_cli::pad_generator;
+use otp_core::state_manager;
+use otp_core::pad_generator;
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
@@ -192,6 +195,7 @@ fn main() {
                             }
                             Err(e) => error!("Failed to generate pad file for ID {pad_id}: {e}"),
                         }
+
                     }
                     state_manager::save_state(&vault_path, &state);
                     info!("Successfully generated and registered {count} pad(s).");
