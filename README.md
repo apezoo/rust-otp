@@ -13,7 +13,7 @@ This repository provides a robust and secure suite of tools for one-time pad (OT
 
 ## Releases
 
-Pre-compiled binaries for our v1.0.0 release are provided below. For future updates, please check the [GitHub Releases page](https://github.com/your-repo/releases).
+Pre-compiled binaries for our v1.0.0 release are provided below. For future updates, please check the [GitHub Releases page](https://github.com/apezoo/rust-otp/releases).
 
 For SHA256 checksums, please see the `sha256sums.txt` file attached to the latest release on our [GitHub Releases page](https://github.com/apezoo/rust-otp/releases/latest).
 
@@ -24,6 +24,13 @@ The one-time pad is a theoretically unbreakable encryption algorithm when used c
 -   **Preventing Pad Reuse**: The system is architected to make it impossible to reuse any portion of a one-time pad.
 -   **Cryptographically Secure Randomness**: One-time pads are generated using a cryptographically secure pseudo-random number generator (CSPRNG).
 -   **No Key Distribution**: This tool does not handle the distribution of one-time pads. It is the user's responsibility to securely share the one-time pad with the intended recipient.
+
+## Choosing the Right Binary
+
+*   `otp-cli`: The command-line interface for Linux.
+*   `otp-cli.exe`: The command-line interface for Windows.
+*   `otp-web`: The web-based interface for Linux.
+*   `otp-web.exe`: The web-based interface for Windows.
 
 ## 🤝 Contributing
 
