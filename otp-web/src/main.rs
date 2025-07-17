@@ -113,7 +113,10 @@ async fn main() {
     let addr = SocketAddr::from(([0, 0, 0, 0], port));
     let my_local_ip = local_ip().unwrap_or_else(|e| {
         eprintln!("Failed to get local IP address: {e}");
-        "127.0.0.1".parse().unwrap()
+        "127.0.0.1".parse().unwrap_or_else(|_| {
+            eprintln!("Failed to parse hardcoded IP address");
+            std::process::exit(1);
+        })
     });
 
     println!("listening on:");
@@ -151,7 +154,7 @@ async fn get_vault_status(
     let total_pads = vault_state.pads.len();
 
     let total_storage_bytes: usize = vault_state.pads.values().map(|p| p.size).sum();
-    let total_used_bytes: usize = vault_state.pads.values().map(|p| p.total_used_bytes()).sum();
+    let total_used_bytes: usize = vault_state.pads.values().map(state_manager::Pad::total_used_bytes).sum();
     let remaining_bytes = total_storage_bytes.saturating_sub(total_used_bytes);
 
     let response = json!({
@@ -184,12 +187,18 @@ async fn generate_pads_handler(
 
     for _ in 0..payload.count {
         let pad_id = Uuid::new_v4().to_string();
-        let file_name = format!("{}.pad", pad_id);
+        let file_name = format!("{pad_id}.pad");
         let pad_path = state.vault_path.join("pads/available").join(&file_name);
         let size_in_bytes = payload.size * 1024 * 1024;
 
-        match pad_generator::generate_pad(pad_path.to_str().unwrap(), size_in_bytes) {
-            Ok(_) => {
+        let Some(pad_path_str) = pad_path.to_str() else {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(json!({ "error": "Pad path contains invalid UTF-8" })),
+            );
+        };
+        match pad_generator::generate_pad(pad_path_str, size_in_bytes) {
+            Ok(()) => {
                 vault_state.add_pad(pad_id.clone(), file_name, size_in_bytes);
                 new_pad_ids.push(pad_id);
             }
@@ -246,7 +255,7 @@ async fn delete_pad_handler(
         let pad_path = state.vault_path.join("pads").join(pad_dir).join(&pad_to_delete.file_name);
 
         match fs::remove_file(&pad_path) {
-            Ok(_) => {
+            Ok(()) => {
                 vault_state.pads.remove(&pad_id);
                 if let Err(e) = state_manager::save_state(&state.vault_path, &vault_state) {
                     return (
@@ -380,29 +389,29 @@ async fn download_pad_handler(
     let vault_state = match state_manager::load_state(&state.vault_path) {
         Ok(vs) => vs,
         Err(e) => {
-            return (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                format!("Failed to load vault state: {}", e),
-            )
-                .into_response();
+            return (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to load vault state: {e}")).into_response();
         }
     };
-    if let Some(pad) = vault_state.pads.get(&pad_id) {
-        let pad_dir = if pad.is_fully_used { "used" } else { "available" };
-        let pad_path = state.vault_path.join("pads").join(pad_dir).join(&pad.file_name);
-
-        if let Ok(data) = fs::read(&pad_path) {
-            let headers = [
-                (header::CONTENT_TYPE, "application/octet-stream".to_string()),
-                (header::CONTENT_DISPOSITION, format!("attachment; filename=\"{}\"", pad.file_name)),
-            ];
-            (headers, Body::from(data)).into_response()
-        } else {
-            (StatusCode::NOT_FOUND, "Pad file not found").into_response()
-        }
-    } else {
-        (StatusCode::NOT_FOUND, "Pad not found in state").into_response()
-    }
+    vault_state.pads.get(&pad_id).map_or_else(
+        || (StatusCode::NOT_FOUND, "Pad not found in state").into_response(),
+        |pad| {
+            let pad_dir = if pad.is_fully_used { "used" } else { "available" };
+            let pad_path = state.vault_path.join("pads").join(pad_dir).join(&pad.file_name);
+            fs::read(&pad_path).map_or_else(
+                |_err| (StatusCode::NOT_FOUND, "Pad file not found").into_response(),
+                |data| {
+                    let headers = [
+                        (header::CONTENT_TYPE, "application/octet-stream".to_string()),
+                        (
+                            header::CONTENT_DISPOSITION,
+                            format!("attachment; filename=\"{}\"", pad.file_name),
+                        ),
+                    ];
+                    (headers, Body::from(data)).into_response()
+                },
+            )
+        },
+    )
 }
 
 async fn upload_pads_handler(
@@ -434,8 +443,11 @@ async fn upload_pads_handler(
         let size_in_bytes = data.len();
 
         // Basic validation: ensure it's a .pad file
-        if !file_name.ends_with(".pad") {
-            continue; // Or return a more specific error
+        if !std::path::Path::new(&file_name)
+            .extension()
+            .is_some_and(|ext| ext.eq_ignore_ascii_case("pad"))
+        {
+            continue;
         }
         
         // The pad ID is the file name without the extension.
@@ -476,20 +488,14 @@ async fn static_path(uri: Uri) -> impl IntoResponse {
                 .header(header::CONTENT_TYPE, mime.as_ref())
                 .body(body)
                 .unwrap_or_else(|_| {
-                    axum::response::Response::builder()
-                        .status(StatusCode::INTERNAL_SERVER_ERROR)
-                        .body(Body::empty())
-                        .unwrap()
+                    (StatusCode::INTERNAL_SERVER_ERROR, "Failed to build response").into_response()
                 })
         }
         None => axum::response::Response::builder()
             .status(StatusCode::NOT_FOUND)
             .body(Body::empty())
             .unwrap_or_else(|_| {
-                axum::response::Response::builder()
-                    .status(StatusCode::INTERNAL_SERVER_ERROR)
-                    .body(Body::empty())
-                    .unwrap()
+                (StatusCode::INTERNAL_SERVER_ERROR, "Failed to build response").into_response()
             }),
     }
 }
