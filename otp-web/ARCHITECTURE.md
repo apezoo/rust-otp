@@ -102,7 +102,7 @@ graph TD
 
 ## 6. Build and Deployment
 
-The `otp-web` application is designed to be deployed as a single, self-contained binary. This is achieved by embedding all frontend assets (HTML, CSS, JavaScript) directly into the executable during the build process.
+The `otp-web` application is designed to be deployed as a single, self-contained binary. This is achieved by embedding all frontend assets (HTML, CSS, JavaScript) directly into the executable at compile time.
 
--   **Build Script (`build.rs`)**: A build script uses the `static-files` crate to recursively package the contents of the `../static` directory.
--   **Serving Embedded Files**: The Axum server uses a custom fallback handler to serve these embedded files from memory. This eliminates the need for a separate `static` assets directory at runtime, simplifying deployment, especially for precompiled binaries distributed across different operating systems.
+-   **Asset Embedding**: We use the `rust-embed` crate to embed the contents of the `../static` directory directly into the application binary. This is handled by a procedural macro at the struct definition, eliminating the need for a separate `build.rs` script.
+-   **Serving Embedded Files**: The Axum server uses a fallback handler to serve these embedded files from memory. This approach ensures that the application is fully self-contained, simplifying deployment and distribution across different operating systems.

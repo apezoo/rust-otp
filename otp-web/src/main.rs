@@ -3,8 +3,8 @@
 
 use axum::{
     body::Body,
-    extract::{Multipart, State, Path},
-    http::{header, HeaderValue, StatusCode, Uri},
+    extract::{Multipart, State},
+    http::{header, StatusCode, Uri},
     response::{IntoResponse, Json, Redirect},
     routing::{delete, get, post},
     Router,
@@ -19,9 +19,12 @@ use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::sync::Arc;
 use tower_http::cors::CorsLayer;
+use rust_embed::RustEmbed;
 use uuid::Uuid;
 
-include!(concat!(env!("OUT_DIR"), "/static-files.rs"));
+#[derive(RustEmbed)]
+#[folder = "../static/"]
+struct Asset;
 
 /// Shared application state
 #[derive(Clone)]
@@ -320,33 +323,32 @@ async fn upload_pads_handler(
             vault_state.add_pad(pad_id.clone(), file_name, size_in_bytes);
             imported_pads.push(pad_id);
         }
-        
-        async fn static_path(uri: Uri) -> impl IntoResponse {
-            let mut path = uri.path().trim_start_matches('/').to_string();
-            if path.is_empty() {
-                path = "index.html".to_string();
-            }
-        
-            match static_files::get(&path) {
-                Some(file) => {
-                    let mime_type = mime_guess::from_path(&path).first_or_octet_stream();
-                    let body = Body::from(file.content);
-                    axum::response::Response::builder()
-                        .status(StatusCode::OK)
-                        .header(header::CONTENT_TYPE, HeaderValue::from_str(mime_type.as_ref()).unwrap())
-                        .body(body)
-                        .unwrap()
-                }
-                None => axum::response::Response::builder()
-                    .status(StatusCode::NOT_FOUND)
-                    .body(Body::empty())
-                    .unwrap(),
-            }
-        }
     }
 
     state_manager::save_state(&state.vault_path, &vault_state);
     (StatusCode::OK, Json(json!({ "imported_pads": imported_pads })))
+}
+
+async fn static_path(uri: Uri) -> impl IntoResponse {
+    let mut path = uri.path().trim_start_matches('/').to_string();
+    if path.is_empty() {
+        path = "index.html".to_string();
+    }
+
+    match Asset::get(&path) {
+        Some(content) => {
+            let body = Body::from(content.data);
+            let mime = mime_guess::from_path(path).first_or_octet_stream();
+            axum::response::Response::builder()
+                .header(header::CONTENT_TYPE, mime.as_ref())
+                .body(body)
+                .unwrap()
+        }
+        None => axum::response::Response::builder()
+            .status(StatusCode::NOT_FOUND)
+            .body(Body::empty())
+            .unwrap(),
+    }
 }
 
 async fn clear_vault_handler(

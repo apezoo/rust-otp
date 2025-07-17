@@ -57,4 +57,4 @@ To build the binaries for both Linux and Windows, run the following command:
 ./build.sh
 ```
 
-This will create `otp-cli` and `otp-web` binaries for both platforms in the `precompiled_binaries` directory. The `otp-web` binary for Windows will have the static assets embedded in it, so it can be run without the `static` directory.
+This will create `otp-cli` and `otp-web` binaries for both platforms in the `precompiled_binaries` directory. The `otp-web` binaries have the static assets embedded, so they can be run without the `static` directory.
