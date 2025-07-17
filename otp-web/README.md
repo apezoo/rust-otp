@@ -1,5 +1,7 @@
 # OTP-Web
 
+![OTP Web App](../../docs/images/screenshot-rust-otp-app.png)
+
 This crate provides a web-based user interface for the OTP encryption tool. It is built with Axum and performs all cryptographic operations on the client-side for maximum security. The application is designed as a single, self-contained binary with all static assets (HTML, JS, CSS) embedded, which simplifies deployment and distribution.
 
 ## Features

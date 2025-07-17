@@ -1,5 +1,7 @@
 # OTP-Core
 
+![OTP Core with Pads](../../docs/images/screenshot-with-pads.png)
+
 A command-line tool for secure one-time pad (OTP) encryption.
 
 ## Overview
