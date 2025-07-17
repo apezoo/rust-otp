@@ -6,33 +6,41 @@ set -e
 # Define target platforms
 LINUX_TARGET="x86_64-unknown-linux-musl"
 WINDOWS_TARGET="x86_64-pc-windows-gnu"
+
 # Install the required Rust targets
 rustup target add "$LINUX_TARGET"
 rustup target add "$WINDOWS_TARGET"
 
 # Create a directory for the pre-compiled binaries
 OUTPUT_DIR="precompiled_binaries"
+echo "Cleaning up old builds and creating output directory..."
 rm -rf "$OUTPUT_DIR"
 mkdir -p "$OUTPUT_DIR"
 
-# --- Build for Linux ---
-echo "Building for Linux..."
-cargo build --release --target "$LINUX_TARGET" --package otp-cli
-cargo build --release --target "$LINUX_TARGET" --package otp-web
+# --- Build all workspace binaries for Linux ---
+echo "Building all workspace binaries for Linux ($LINUX_TARGET)..."
+cargo build --release --workspace --target "$LINUX_TARGET"
 
-# Strip the Linux binaries to reduce size and move them to the output directory
-strip "target/$LINUX_TARGET/release/otp-cli"
-strip "target/$LINUX_TARGET/release/otp-web"
-mv "target/$LINUX_TARGET/release/otp-cli" "$OUTPUT_DIR/"
-mv "target/$LINUX_TARGET/release/otp-web" "$OUTPUT_DIR/"
+# --- Build all workspace binaries for Windows ---
+echo "Building all workspace binaries for Windows ($WINDOWS_TARGET)..."
+cargo build --release --workspace --target "$WINDOWS_TARGET"
 
-# --- Build for Windows ---
-echo "Building for Windows..."
-cargo build --release --target "$WINDOWS_TARGET" --package otp-cli
-cargo build --release --target "$WINDOWS_TARGET" --package otp-web
+# --- Post-build processing ---
+echo "Stripping and organizing binaries..."
 
-# Move the Windows binaries to the output directory
-mv "target/$WINDOWS_TARGET/release/otp-cli.exe" "$OUTPUT_DIR/"
-mv "target/$WINDOWS_TARGET/release/otp-web.exe" "$OUTPUT_DIR/"
+# Strip and move Linux binaries
+for bin in target/"$LINUX_TARGET"/release/otp-*; do
+    if [[ -f "$bin" && ! -d "$bin" ]]; then
+        strip "$bin"
+        mv "$bin" "$OUTPUT_DIR/"
+    fi
+done
+
+# Move Windows binaries
+for bin in target/"$WINDOWS_TARGET"/release/otp-*.exe; do
+    if [[ -f "$bin" ]]; then
+        mv "$bin" "$OUTPUT_DIR/"
+    fi
+done
 
 echo "Pre-compiled binaries are available in the '$OUTPUT_DIR' directory."
