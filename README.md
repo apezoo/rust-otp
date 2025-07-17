@@ -51,31 +51,10 @@ cargo run -p otp-cli -- --help
 
 ## 📦 Building Binaries
 
-This project is configured to build stand-alone binaries for both Linux and Windows.
-
-### Linux
-
-To build the Linux binaries, run the following command:
+To build the binaries for both Linux and Windows, run the following command:
 
 ```bash
 ./build.sh
 ```
 
-This will create `otp-cli` and `otp-web` binaries in the `target/x86_64-unknown-linux-musl/release` directory.
-
-### Windows
-
-To build the Windows binaries, you will need to have the `x86_64-pc-windows-gnu` toolchain installed. You can install it with the following command:
-
-```bash
-rustup target add x86_64-pc-windows-gnu
-```
-
-Once the toolchain is installed, you can build the binaries with the following commands:
-
-```bash
-cargo build --release --target x86_64-pc-windows-gnu --package otp-cli
-cargo build --release --target x86_64-pc-windows-gnu --package otp-web
-```
-
-The `otp-web.exe` binary will have the static assets embedded in it, so it can be run without the `static` directory.
+This will create `otp-cli` and `otp-web` binaries for both platforms in the `precompiled_binaries` directory. The `otp-web` binary for Windows will have the static assets embedded in it, so it can be run without the `static` directory.

@@ -18,7 +18,6 @@ use std::fs;
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::sync::Arc;
-use axum::http::Uri;
 use tower_http::cors::CorsLayer;
 use uuid::Uuid;
 
@@ -54,7 +53,6 @@ struct MarkUsedRequest {
     end: usize,
 }
 
-include!(concat!(env!("OUT_DIR"), "/static-files.rs"));
 
 #[tokio::main]
 async fn main() {
@@ -92,7 +90,7 @@ async fn main() {
         .route("/api/vault/clear", post(clear_vault_handler))
         .with_state(app_state)
         .layer(CorsLayer::permissive())
-        .fallback(static_file_handler);
+        .fallback_service(tower_http::services::ServeDir::new("../static"));
 
     // Run the server.
     let addr = SocketAddr::from(([0, 0, 0, 0], port));
@@ -337,21 +335,3 @@ async fn clear_vault_handler(
     (StatusCode::OK, Json(json!({ "message": "Vault cleared successfully" })))
 }
 
-async fn static_file_handler(uri: Uri) -> impl IntoResponse {
-    let path = uri.path().trim_start_matches('/');
-    let path = if path.is_empty() {
-        "index.html"
-    } else {
-        path
-    };
-
-    match static_files::get(path) {
-        Some((content_type, bytes)) => (
-            StatusCode::OK,
-            [(header::CONTENT_TYPE, content_type)],
-            bytes,
-        )
-            .into_response(),
-        None => (StatusCode::NOT_FOUND, "Not Found").into_response(),
-    }
-}
